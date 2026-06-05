@@ -12,6 +12,7 @@ $script:StealthShortcutName = "Stealth"
 $script:StealthIconFile = "stealth-dark.ico"
 $script:StealthProcessNames = @("firefox", "plugin-container")
 $script:InstallScriptDir = if ($PSCommandPath) { Split-Path -Parent $PSCommandPath } else { $PSScriptRoot }
+$script:MaxSafePrefsJsBytes = 64MB
 $script:SetupLogAction = $null
 $script:SetupLogQueue = $null
 $script:SetupStatusQueue = $null
@@ -199,6 +200,28 @@ function Write-TextFileNoBom {
     [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
 }
 
+function Repair-OversizedPrefsFile {
+    param([string]$ProfilePath)
+
+    $prefsPath = Join-Path $ProfilePath "prefs.js"
+    if (-not (Test-Path $prefsPath)) { return }
+
+    $info = Get-Item $prefsPath
+    if ($info.Length -le $script:MaxSafePrefsJsBytes) { return }
+
+    $backup = Join-Path $ProfilePath ("prefs.js.oversized-{0}.bak" -f (Get-Date -Format "yyyyMMddHHmmss"))
+    Move-Item -Path $prefsPath -Destination $backup -Force
+
+    $sizeMb = [math]::Round($info.Length / 1MB, 2)
+    Write-SetupLog "prefs.js is oversized (${sizeMb} MB). Resetting file; backup: $backup" "Warn"
+
+    $seed = @(
+        "// Recreated by Stealth setup due oversized prefs.js",
+        "user_pref(`"browser.shell.checkDefaultBrowser`", false);"
+    ) -join "`n"
+    Write-TextFileNoBom -Path $prefsPath -Content ($seed + "`n")
+}
+
 function Set-ProfilePref {
     param(
         [string]$ProfilePath,
@@ -221,14 +244,37 @@ function Set-ProfilePref {
     else {
         $line = "user_pref(`"$Name`", `"$Value`");"
     }
-    $content = Get-Content $prefsPath -Raw
-    if ($content -match "user_pref\(`"$escapedName`"") {
-        $content = [regex]::Replace($content, "user_pref\(`"$escapedName`",[^;]+\);", $line)
+    Repair-OversizedPrefsFile -ProfilePath $ProfilePath
+
+    $tmpPath = Join-Path $ProfilePath ("prefs.{0}.tmp" -f [guid]::NewGuid().ToString("n"))
+    $pattern = "^\s*user_pref\(`"$escapedName`","
+    $found = $false
+
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    $reader = $null
+    $writer = $null
+    try {
+        $reader = New-Object System.IO.StreamReader($prefsPath)
+        $writer = New-Object System.IO.StreamWriter($tmpPath, $false, $utf8NoBom)
+        while (($current = $reader.ReadLine()) -ne $null) {
+            if (-not $found -and $current -match $pattern) {
+                $writer.WriteLine($line)
+                $found = $true
+            }
+            else {
+                $writer.WriteLine($current)
+            }
+        }
+        if (-not $found) {
+            $writer.WriteLine($line)
+        }
     }
-    else {
-        $content = $content.TrimEnd() + "`n$line`n"
+    finally {
+        if ($reader) { $reader.Dispose() }
+        if ($writer) { $writer.Dispose() }
     }
-    Write-TextFileNoBom -Path $prefsPath -Content $content
+
+    Move-Item -Path $tmpPath -Destination $prefsPath -Force
 }
 
 function Set-ProfileDefaultSearch {

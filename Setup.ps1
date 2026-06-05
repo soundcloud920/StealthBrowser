@@ -113,12 +113,12 @@ function Set-FlatButtonTheme {
     )
 
     if ($Primary) {
-        $Button.ForeColor = [System.Drawing.Color]::Black
-        $Button.BackColor = [System.Drawing.Color]::FromArgb(0, 217, 184)
+        $Button.ForeColor = $ColorText
+        $Button.BackColor = $ColorSurface
         $Button.UseVisualStyleBackColor = $false
-        $Button.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(0, 217, 184)
-        $Button.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(0, 232, 200)
-        $Button.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::FromArgb(0, 196, 165)
+        $Button.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(58, 58, 58)
+        $Button.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(22, 22, 22)
+        $Button.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
         return
     }
 
@@ -267,8 +267,6 @@ function Update-InstallStatusText {
 
 function Sync-InstallFormLayout {
     $y = $pnlVersion.Location.Y + $pnlVersion.Size.Height + 6
-    $chkProfileOnly.Location = New-Object System.Drawing.Point(26, $y)
-    $y += $chkProfileOnly.Size.Height + 8
     $btnInstall.Location = New-Object System.Drawing.Point(24, $y)
     $y += $btnInstall.Size.Height + 10
     $lblStatus.Location = New-Object System.Drawing.Point(26, $y)
@@ -391,21 +389,7 @@ $pnlVersion.Size = New-Object System.Drawing.Size(452, 22)
 $pnlVersion.Location = New-Object System.Drawing.Point(26, 94)
 $form.Controls.Add($pnlVersion) | Out-Null
 
-$chkProfileOnly = New-Object System.Windows.Forms.CheckBox
-$chkProfileOnly.Text = "Только обновить профиль (без установки движка)"
-$chkProfileOnly.Font = $uiFont
-$chkProfileOnly.ForeColor = $ColorText
-$chkProfileOnly.BackColor = $ColorBg
-$chkProfileOnly.FlatStyle = "Flat"
-$chkProfileOnly.AutoSize = $false
-$chkProfileOnly.Size = New-Object System.Drawing.Size(452, 22)
-$chkProfileOnly.Location = New-Object System.Drawing.Point(26, 120)
-$chkProfileOnly.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(120, 120, 120)
-$chkProfileOnly.FlatAppearance.CheckedBackColor = [System.Drawing.Color]::FromArgb(0, 217, 184)
-$chkProfileOnly.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(26, 26, 26)
-$form.Controls.Add($chkProfileOnly) | Out-Null
-
-$btnInstall = New-FlatButton -Text "Установить" -X 24 -Y 150 -W 452 -H 40 -Parent $form -Font $btnFont
+$btnInstall = New-FlatButton -Text "Установить Stealth" -X 24 -Y 124 -W 452 -H 40 -Parent $form -Font $btnFont
 
 $lblStatus = New-Object System.Windows.Forms.Label
 $lblStatus.Font = $uiFont
@@ -413,9 +397,9 @@ $lblStatus.ForeColor = $ColorMuted
 $lblStatus.BackColor = $ColorBg
 $lblStatus.AutoSize = $false
 $lblStatus.Size = New-Object System.Drawing.Size(452, 22)
-$lblStatus.Location = New-Object System.Drawing.Point(26, 200)
+$lblStatus.Location = New-Object System.Drawing.Point(26, 174)
 $form.Controls.Add($lblStatus) | Out-Null
-Set-StealthWrappedLabel -Label $lblStatus -Text "Одна установка: Firefox → Stealth. Браузеры закроются автоматически." -MinHeight 22
+Set-StealthWrappedLabel -Label $lblStatus -Text "Одна кнопка: если Firefox есть — настроим Stealth поверх. Если нет — установим Firefox и сразу Stealth." -MinHeight 22
 
 $progressBar = New-Object System.Windows.Forms.ProgressBar
 $progressBar.Location = New-Object System.Drawing.Point(24, 226)
@@ -546,19 +530,12 @@ function Complete-InstallUi {
         $progressBar.Value = 0
     }
     else {
-        if ($chkProfileOnly.Checked) {
-            Update-InstallStatusText -Text "Готово. Профиль Stealth обновлён."
-        }
-        else {
-            Update-InstallStatusText -Text "Готово. Stealth запущен."
-        }
+        Update-InstallStatusText -Text "Готово. Stealth установлен."
         $lblStatus.ForeColor = $ColorOk
         [void]$logQueue.Enqueue("")
         [void]$logQueue.Enqueue("[ok] Готово!")
-        if (-not $chkProfileOnly.Checked) {
-            [void]$logQueue.Enqueue("Ярлык: Stealth (рабочий стол / Пуск / панель задач)")
-            [void]$logQueue.Enqueue("Ярлык Mozilla Firefox не создаётся")
-        }
+        [void]$logQueue.Enqueue("Ярлык: Stealth (рабочий стол / Пуск / панель задач)")
+        [void]$logQueue.Enqueue("Браузер не запускается автоматически после установки")
         $progressBar.Style = "Continuous"
         $progressBar.Value = 100
     }
@@ -582,84 +559,39 @@ function Update-InstallUiState {
     $status = Get-StealthSetupStatus
     $cfg = Get-SetupVersion
 
-    if (-not $status.StealthInstalled) {
+    if (-not $status.ProfileExists) {
         Set-StealthVersionLabel -Text (@(
-            "Stealth не установлен"
-            "Установщик v$($cfg.SetupVersion) скачает движок и настроит профиль"
+            "Stealth не настроен"
+            "Нажми «Установить Stealth»: Firefox будет установлен при необходимости и сразу настроен под Stealth"
         ) -join "`r`n") -BaseColor $ColorWarn -MinHeight 22
         $btnInstall.Text = "Установить Stealth"
-        $btnInstall.Enabled = $true
-        Set-FlatButtonTheme -Button $btnInstall -Primary
-    }
-    elseif (-not $status.ProfileExists) {
-        Set-StealthVersionLabel -Text "Профиль Stealth: не найден · установщик v$($cfg.SetupVersion)" -BaseColor $ColorMuted -MinHeight 22
-        $btnInstall.Text = "Установить"
         $btnInstall.Enabled = $true
         Set-FlatButtonTheme -Button $btnInstall -Primary
     }
     elseif ($status.IsCurrent) {
         Set-StealthVersionLabel -Text (@(
             "Профиль Stealth: v$($status.InstalledVersion)"
-            "Установлена последняя версия"
+            "Установлена последняя версия (можно переустановить одним нажатием)"
         ) -join "`r`n") -BaseColor $ColorOk -AccentWords @("последняя") -AccentColor $ColorOk -MinHeight 36
-        $btnInstall.Text = "Переустановить профиль"
+        $btnInstall.Text = "Установить Stealth"
         $btnInstall.Enabled = $true
-        Set-FlatButtonTheme -Button $btnInstall
+        Set-FlatButtonTheme -Button $btnInstall -Primary
     }
     elseif ($status.InstalledVersion) {
         Set-StealthVersionLabel -Text "Профиль Stealth: v$($status.InstalledVersion) → v$($cfg.SetupVersion)" -BaseColor $ColorWarn -AccentWords @() -MinHeight 22
-        $btnInstall.Text = "Обновить до v$($cfg.SetupVersion)"
+        $btnInstall.Text = "Установить Stealth"
         $btnInstall.Enabled = $true
         Set-FlatButtonTheme -Button $btnInstall -Primary
     }
     else {
         Set-StealthVersionLabel -Text "Профиль Stealth без маркера версии · установщик v$($status.AvailableVersion)" -BaseColor $ColorWarn -AccentWords @() -MinHeight 22
-        $btnInstall.Text = "Применить профиль"
+        $btnInstall.Text = "Установить Stealth"
         $btnInstall.Enabled = $true
         Set-FlatButtonTheme -Button $btnInstall -Primary
     }
 
-    $chkProfileOnly.Enabled = $status.EngineInstalled
-    if (-not $status.EngineInstalled) {
-        $chkProfileOnly.Checked = $false
-    }
-    elseif ($status.NeedsUpdate -and $status.ProfileExists) {
-        $chkProfileOnly.Checked = $true
-    }
-    elseif ($status.IsCurrent) {
-        $chkProfileOnly.Checked = $false
-    }
-
-    if ($chkProfileOnly.Enabled) {
-        $chkProfileOnly.ForeColor = $ColorText
-    }
-    else {
-        $chkProfileOnly.ForeColor = $ColorMuted
-    }
-
     Sync-InstallFormLayout
 }
-
-$chkProfileOnly.Add_CheckedChanged({
-    if (-not $chkProfileOnly.Enabled) { return }
-
-    $status = Get-StealthSetupStatus
-    $cfg = Get-SetupVersion
-
-    if ($chkProfileOnly.Checked) {
-        if ($status.NeedsUpdate) {
-            $btnInstall.Text = "Обновить до v$($cfg.SetupVersion)"
-            Set-FlatButtonTheme -Button $btnInstall -Primary
-        }
-        else {
-            $btnInstall.Text = "Обновить профиль"
-            Set-FlatButtonTheme -Button $btnInstall
-        }
-        return
-    }
-
-    Update-InstallUiState
-})
 
 Update-InstallUiState
 
@@ -667,7 +599,6 @@ $btnInstall.Add_Click({
     if ($script:installHandle -and -not $script:installHandle.IsCompleted) { return }
 
     $btnInstall.Enabled = $false
-    $chkProfileOnly.Enabled = $false
     $logBox.Clear()
     Update-InstallStatusText -Text "Запуск установки..."
     $lblStatus.ForeColor = $ColorText
@@ -685,7 +616,6 @@ $btnInstall.Add_Click({
     [void]$logQueue.Enqueue("StealthBrowser setup")
     [void]$logQueue.Enqueue("")
 
-    $useProfileOnly = $chkProfileOnly.Checked
     $script:installUiFinalized = $false
     $script:installEnded = $false
     $script:installFaulted = $false
@@ -710,8 +640,7 @@ param(
     [string]$Root,
     [object]$LogQueue,
     [object]$StatusQueue,
-    [object]$ProgressQueue,
-    [bool]$ProfileOnly
+    [object]$ProgressQueue
 )
 Set-Location $Root
 . (Join-Path $Root "Install-Stealth.ps1")
@@ -719,12 +648,13 @@ $script:SetupLogQueue = $LogQueue
 $script:SetupStatusQueue = $StatusQueue
 $script:SetupProgressQueue = $ProgressQueue
 try {
-    Invoke-StealthSetup -LaunchWhenDone -ProfileOnly:$ProfileOnly
-    if (-not $ProfileOnly) {
-        $status = Get-StealthSetupStatus
-        if (-not $status.ProfileExists) {
-            throw "Профиль Stealth не создан. Повторите установку."
-        }
+    Invoke-StealthSetup
+    $status = Get-StealthSetupStatus
+    if (-not $status.ProfileExists) {
+        throw "Профиль Stealth не создан. Повторите установку."
+    }
+    if (-not $status.EngineInstalled) {
+        throw "Firefox engine не установлен. Повторите установку."
     }
 }
 catch {
@@ -738,7 +668,6 @@ catch {
     $null = $script:installPs.AddArgument($logQueue)
     $null = $script:installPs.AddArgument($statusQueue)
     $null = $script:installPs.AddArgument($progressQueue)
-    $null = $script:installPs.AddArgument([bool]$useProfileOnly)
 
     $script:installHandle = $script:installPs.BeginInvoke()
 })

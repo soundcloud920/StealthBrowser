@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SetProfileSearch")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f3b7ea8e31b0cdcf0e380fa1c97958e03ef78944")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+15af7f8797906dc159d7e408aa1d1da0d1d5890d")]
 [assembly: System.Reflection.AssemblyProductAttribute("SetProfileSearch")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SetProfileSearch")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
