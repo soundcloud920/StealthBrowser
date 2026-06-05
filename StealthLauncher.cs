@@ -14,12 +14,12 @@ namespace StealthBrowser
         private const int UpdateCheckIntervalHours = 24;
 
         [STAThread]
-        private static void Main()
+        private static void Main(string[] args)
         {
             Application.EnableVisualStyles();
             try
             {
-                Run();
+                Run(args ?? new string[0]);
             }
             catch (Exception ex)
             {
@@ -27,7 +27,7 @@ namespace StealthBrowser
             }
         }
 
-        private static void Run()
+        private static void Run(string[] args)
         {
             string appDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -64,16 +64,51 @@ namespace StealthBrowser
                 return;
             }
 
-            StartBrowser(engine, profile);
-            TryPromptUpdate(configPath, appDir, product, setupVersion, githubRepo, dismissed, json);
+            string launchUrl = ExtractLaunchUrl(args);
+            bool openedExternally = !string.IsNullOrEmpty(launchUrl);
+            StartBrowser(engine, profile, launchUrl);
+            if (!openedExternally)
+            {
+                TryPromptUpdate(configPath, appDir, product, setupVersion, githubRepo, dismissed, json);
+            }
         }
 
-        private static void StartBrowser(string engine, string profile)
+        private static string ExtractLaunchUrl(string[] args)
         {
+            if (args == null || args.Length == 0) return null;
+            for (int i = 0; i < args.Length; i++)
+            {
+                string arg = args[i] ?? "";
+                if (arg.Equals("-url", StringComparison.OrdinalIgnoreCase) ||
+                    arg.Equals("--url", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length && !string.IsNullOrWhiteSpace(args[i + 1]))
+                    {
+                        return args[i + 1];
+                    }
+                }
+                if (arg.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                    arg.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                    arg.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+                {
+                    return arg;
+                }
+            }
+            return null;
+        }
+
+        private static void StartBrowser(string engine, string profile, string url)
+        {
+            string arguments = "-profile \"" + profile + "\"";
+            if (!string.IsNullOrEmpty(url))
+            {
+                arguments += " -osint -url \"" + url.Replace("\"", "\\\"") + "\"";
+            }
+
             Process.Start(new ProcessStartInfo
             {
                 FileName = engine,
-                Arguments = "-no-remote -profile \"" + profile + "\"",
+                Arguments = arguments,
                 UseShellExecute = true
             });
         }

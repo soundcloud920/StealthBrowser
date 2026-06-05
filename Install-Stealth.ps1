@@ -691,29 +691,48 @@ function Write-StealthProfileMarker {
     Write-TextFileNoBom -Path (Join-Path $chromeDir $script:StealthMarkerFile) -Content $marker
 }
 
+function Test-StealthSetupNeedsUpdate {
+    param(
+        [string]$Installed,
+        [string]$Available
+    )
+
+    if (-not $Installed) { return $true }
+    if (-not $Available) { return $false }
+    if ($Installed -eq $Available) { return $false }
+
+    $installedBase = ConvertTo-StealthVersion $Installed
+    $availableBase = ConvertTo-StealthVersion $Available
+    if ($installedBase -and $availableBase) {
+        if ($installedBase -lt $availableBase) { return $true }
+        if ($installedBase -gt $availableBase) { return $false }
+    }
+
+    return $Installed -ne $Available
+}
+
+function Test-StealthEngineInstalled {
+    $engineExe = Join-Path (Get-StealthEngineRoot) "firefox.exe"
+    return Test-Path $engineExe
+}
+
 function Get-StealthSetupStatus {
     $cfg = Get-SetupVersion
     $profilePath = Get-StealthProfilePath
     $marker = if ($profilePath) { Get-StealthProfileMarker -ProfilePath $profilePath } else { $null }
     $installedVer = if ($marker) { $marker.SetupVersion } else { $null }
     $availableVer = $cfg.SetupVersion
-    $needsUpdate = $false
-
-    if ($installedVer) {
-        try {
-            $needsUpdate = [version]$installedVer -lt [version]$availableVer
-        }
-        catch {
-            $needsUpdate = $true
-        }
-    }
+    $needsUpdate = Test-StealthSetupNeedsUpdate -Installed $installedVer -Available $availableVer
+    $engineInstalled = Test-StealthEngineInstalled
+    $stealthInstalled = $engineInstalled -or [bool]$profilePath
 
     return [PSCustomObject]@{
         AvailableVersion = $availableVer
         InstalledVersion = $installedVer
         ProfilePath      = $profilePath
         ProfileExists    = [bool]$profilePath
-        StealthInstalled = [bool](Get-MozillaFirefoxSource)
+        EngineInstalled  = $engineInstalled
+        StealthInstalled = $stealthInstalled
         NeedsUpdate      = $needsUpdate
         IsCurrent        = [bool]($installedVer -and -not $needsUpdate)
     }
@@ -781,7 +800,7 @@ function Install-StealthShortcut {
         Write-SetupLog "shortcut: $lnkPath" "Detail"
     }
 
-    Register-StealthTaskbarIdentity -StealthExe $StealthExe -LauncherPath $launcherExe -IconPath "$launcherExe,0" -ProfilePath $ProfilePath
+    Register-StealthTaskbarIdentity -StealthExe $StealthExe -LauncherPath $launcherExe -IconPath "$launcherExe,0" -ProfilePath $ProfilePath -SetAsDefaultBrowser
     Remove-MozillaFirefoxShortcuts
     $desktopLnk = Join-Path $env:USERPROFILE "Desktop\$shortcutName.lnk"
     Pin-StealthShortcutToTaskbar -LnkPath $desktopLnk -LauncherCmd $launcherExe -IconPath "$launcherExe,0"
@@ -859,7 +878,7 @@ function Apply-StealthProfileBundle {
     if (Test-Path $localePrefsPath) {
         $userJs += "`n" + (Get-Content $localePrefsPath -Raw)
     }
-    if (Test-Path $toolbarPrefsPath) {
+    if ((-not $marker) -and (Test-Path $toolbarPrefsPath)) {
         $userJs += "`n" + (Get-Content $toolbarPrefsPath -Raw)
     }
     if (Test-Path $searchPrefsPath) {
@@ -896,7 +915,7 @@ function Invoke-StealthSetup {
     Write-SetupProgress -Percent 5 -Message "Браузер закрыт"
 
     if ($ProfileOnly) {
-        if (-not (Get-MozillaFirefoxSource)) {
+        if (-not (Test-StealthEngineInstalled)) {
             throw "Stealth is not installed. Run full install first (without -ProfileOnly)."
         }
         Write-SetupProgress -Percent 60 -Message "Синхронизация движка Stealth..."
@@ -929,7 +948,7 @@ function Invoke-StealthSetup {
         Install-StealthLauncherFiles -InstallScriptDir $script:InstallScriptDir
         $launcherExe = Get-StealthLauncherExe
         if (Test-Path $launcherExe) {
-            Register-StealthTaskbarIdentity -StealthExe $stealthExe -LauncherPath $launcherExe -IconPath "$launcherExe,0" -ProfilePath $profilePath
+            Register-StealthTaskbarIdentity -StealthExe $stealthExe -LauncherPath $launcherExe -IconPath "$launcherExe,0" -ProfilePath $profilePath -SetAsDefaultBrowser
         }
     }
 

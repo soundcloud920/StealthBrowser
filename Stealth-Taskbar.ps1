@@ -191,9 +191,85 @@ function Register-StealthEngineTaskBarMapping {
     }
 }
 
+function Register-StealthProtocolHandler {
+    param(
+        [string]$ProgId,
+        [string]$DisplayName,
+        [string]$OpenCommand,
+        [string]$IconPath
+    )
+
+    $root = "HKCU:\Software\Classes\$ProgId"
+    New-Item -Path $root -Force | Out-Null
+    Set-ItemProperty -Path $root -Name "(default)" -Value $DisplayName -Type String
+    Set-ItemProperty -Path $root -Name "FriendlyTypeName" -Value $DisplayName -Type String
+    if ($ProgId -like "*URL") {
+        Set-ItemProperty -Path $root -Name "URL Protocol" -Value "" -Type String
+    }
+    if ($IconPath) {
+        Set-ItemProperty -Path $root -Name "DefaultIcon" -Value "$IconPath,0" -Type String
+    }
+
+    $shellOpen = Join-Path $root "shell\open\command"
+    New-Item -Path (Split-Path $shellOpen -Parent) -Force | Out-Null
+    New-Item -Path $shellOpen -Force | Out-Null
+    Set-ItemProperty -Path $shellOpen -Name "(default)" -Value $OpenCommand -Type String
+}
+
+function Set-StealthStartMenuInternetShellOpen {
+    param(
+        [string]$ClientRoot,
+        [string]$LaunchCommand
+    )
+
+    $shellOpen = Join-Path $ClientRoot "shell\open\command"
+    New-Item -Path (Split-Path $shellOpen -Parent) -Force | Out-Null
+    New-Item -Path $shellOpen -Force | Out-Null
+    Set-ItemProperty -Path $shellOpen -Name "(default)" -Value $LaunchCommand -Type String
+}
+
+function Register-StealthStartMenuInternetEntry {
+    param(
+        [string]$ClientId,
+        [string]$DisplayName,
+        [string]$LaunchCommand,
+        [string]$IconResource,
+        [string]$UrlProgId,
+        [string]$HtmlProgId,
+        [string]$RegisteredApplications
+    )
+
+    $clientRoot = "HKCU:\Software\Clients\StartMenuInternet\$ClientId"
+    New-Item -Path $clientRoot -Force | Out-Null
+    Set-ItemProperty -Path $clientRoot -Name "(default)" -Value $DisplayName -Type String
+    Set-ItemProperty -Path $clientRoot -Name "shell" -Value "open" -Type String
+    Set-ItemProperty -Path $clientRoot -Name "DefaultIcon" -Value $IconResource -Type String
+    Set-StealthStartMenuInternetShellOpen -ClientRoot $clientRoot -LaunchCommand $LaunchCommand
+
+    $capabilities = Join-Path $clientRoot "Capabilities"
+    New-Item -Path $capabilities -Force | Out-Null
+    Set-ItemProperty -Path $capabilities -Name "ApplicationName" -Value $DisplayName -Type String
+    Set-ItemProperty -Path $capabilities -Name "ApplicationDescription" -Value $DisplayName -Type String
+    Set-ItemProperty -Path $capabilities -Name "ApplicationIcon" -Value $IconResource -Type String
+
+    $urlAssoc = Join-Path $capabilities "URLAssociations"
+    New-Item -Path $urlAssoc -Force | Out-Null
+    Set-ItemProperty -Path $urlAssoc -Name "http" -Value $UrlProgId -Type String
+    Set-ItemProperty -Path $urlAssoc -Name "https" -Value $UrlProgId -Type String
+
+    $fileAssoc = Join-Path $capabilities "FileAssociations"
+    New-Item -Path $fileAssoc -Force | Out-Null
+    foreach ($ext in @(".htm", ".html", ".xhtml", ".xht", ".shtml")) {
+        Set-ItemProperty -Path $fileAssoc -Name $ext -Value $HtmlProgId -Type String
+    }
+
+    Set-ItemProperty -Path $RegisteredApplications -Name $ClientId -Value "Software\Clients\StartMenuInternet\$ClientId\Capabilities" -Type String
+}
+
 function Register-StealthStartMenuInternetClient {
     param(
         [string]$StealthExe,
+        [string]$ProfilePath,
         [string]$IconPath
     )
 
@@ -202,23 +278,60 @@ function Register-StealthStartMenuInternetClient {
     $registered = "HKCU:\Software\RegisteredApplications"
     New-Item -Path $registered -Force | Out-Null
 
-    foreach ($clientId in @("StealthBrowser", "Firefox-308046B0AF4A39CB", "Firefox-7FDD1D39F7222CD")) {
-        $clientRoot = "HKCU:\Software\Clients\StartMenuInternet\$clientId"
-        New-Item -Path $clientRoot -Force | Out-Null
-        Set-ItemProperty -Path $clientRoot -Name "(default)" -Value $displayName -Type String
-        if ($clientId -eq "StealthBrowser") {
-            Set-ItemProperty -Path $clientRoot -Name "shell" -Value "open" -Type String
-            $cmd = "`"$StealthExe`""
-            Set-ItemProperty -Path $clientRoot -Name "open" -Value $cmd -Type String
-        }
-
-        $capabilities = Join-Path $clientRoot "Capabilities"
-        New-Item -Path $capabilities -Force | Out-Null
-        Set-ItemProperty -Path $capabilities -Name "ApplicationName" -Value $displayName -Type String
-        Set-ItemProperty -Path $capabilities -Name "ApplicationDescription" -Value $displayName -Type String
-        Set-ItemProperty -Path $capabilities -Name "ApplicationIcon" -Value $iconResource -Type String
-        Set-ItemProperty -Path $registered -Name $clientId -Value "Software\Clients\StartMenuInternet\$clientId\Capabilities" -Type String
+    $launcherExe = if (Get-Command Get-StealthLauncherExe -ErrorAction SilentlyContinue) {
+        Get-StealthLauncherExe
     }
+    else {
+        Join-Path $env:LOCALAPPDATA "StealthBrowser\Stealth.exe"
+    }
+    if ($launcherExe -and (Test-Path $launcherExe)) {
+        $launchCommand = "`"$launcherExe`""
+    }
+    else {
+        $launchCommand = "`"$StealthExe`" -profile `"$ProfilePath`""
+    }
+
+    # URL/file handlers should target firefox.exe directly: this is the most
+    # reliable path for Windows external link activation.
+    $urlCommand = "`"$StealthExe`" -profile `"$ProfilePath`" `"%1`""
+    $htmlCommand = $urlCommand
+
+    Register-StealthProtocolHandler -ProgId "StealthBrowserURL" -DisplayName "Stealth URL" -OpenCommand $urlCommand -IconPath $IconPath
+    Register-StealthProtocolHandler -ProgId "StealthBrowserHTML" -DisplayName "Stealth HTML Document" -OpenCommand $htmlCommand -IconPath $IconPath
+
+    $installHashScript = Join-Path $PSScriptRoot "scripts\Get-StealthInstallHash.ps1"
+    $installHash = $null
+    if (Test-Path $installHashScript) {
+        . $installHashScript
+        $installHash = Get-StealthFirefoxInstallHash -StealthExe $StealthExe
+    }
+
+    if ($installHash) {
+        $firefoxUrlProgId = "FirefoxURL-$installHash"
+        $firefoxHtmlProgId = "FirefoxHTML-$installHash"
+        $firefoxPdfProgId = "FirefoxPDF-$installHash"
+        Register-StealthProtocolHandler -ProgId $firefoxUrlProgId -DisplayName "Firefox URL" -OpenCommand $urlCommand -IconPath $IconPath
+        Register-StealthProtocolHandler -ProgId $firefoxHtmlProgId -DisplayName "Firefox HTML Document" -OpenCommand $htmlCommand -IconPath $IconPath
+        Register-StealthProtocolHandler -ProgId $firefoxPdfProgId -DisplayName "Firefox PDF Document" -OpenCommand $urlCommand -IconPath $IconPath
+
+        Register-StealthStartMenuInternetEntry `
+            -ClientId "Firefox-$installHash" `
+            -DisplayName $displayName `
+            -LaunchCommand $launchCommand `
+            -IconResource $iconResource `
+            -UrlProgId $firefoxUrlProgId `
+            -HtmlProgId $firefoxHtmlProgId `
+            -RegisteredApplications $registered
+    }
+
+    Register-StealthStartMenuInternetEntry `
+        -ClientId "StealthBrowser" `
+        -DisplayName $displayName `
+        -LaunchCommand $launchCommand `
+        -IconResource $iconResource `
+        -UrlProgId "StealthBrowserURL" `
+        -HtmlProgId "StealthBrowserHTML" `
+        -RegisteredApplications $registered
 }
 
 function Set-StealthAppUserModelDisplayName {
@@ -361,19 +474,52 @@ Next
     }
 }
 
+function Invoke-StealthSetDefaultBrowser {
+    param(
+        [string]$StealthExe,
+        [string]$ProfilePath
+    )
+
+    if (-not (Test-Path -LiteralPath $StealthExe)) {
+        return $false
+    }
+
+    try {
+        Start-Process -FilePath $StealthExe -ArgumentList @(
+            "-no-remote",
+            "-profile", $ProfilePath,
+            "-setDefaultBrowser"
+        ) -WindowStyle Hidden -ErrorAction Stop | Out-Null
+        if (Get-Command Write-SetupLog -ErrorAction SilentlyContinue) {
+            Write-SetupLog "Stealth default-browser prompt started (confirm in Windows if shown)" "Ok"
+        }
+        return $true
+    }
+    catch {
+        if (Get-Command Write-SetupLog -ErrorAction SilentlyContinue) {
+            Write-SetupLog "Default browser registration: $($_.Exception.Message)" "Warn"
+        }
+        return $false
+    }
+}
+
 function Register-StealthTaskbarIdentity {
     param(
         [string]$StealthExe,
         [string]$LauncherPath,
         [string]$IconPath,
-        [string]$ProfilePath
+        [string]$ProfilePath,
+        [switch]$SetAsDefaultBrowser
     )
 
     Install-StealthDistributionPolicies -StealthExe $StealthExe
     Register-StealthEngineTaskBarMapping -StealthExe $StealthExe
 
     $iconExe = if ($IconPath -match '^([^,]+)') { $Matches[1] } else { $IconPath }
-    Register-StealthStartMenuInternetClient -StealthExe $StealthExe -IconPath $iconExe
+    Register-StealthStartMenuInternetClient -StealthExe $StealthExe -ProfilePath $ProfilePath -IconPath $iconExe
+    if ($SetAsDefaultBrowser) {
+        Invoke-StealthSetDefaultBrowser -StealthExe $StealthExe -ProfilePath $ProfilePath | Out-Null
+    }
     foreach ($modelId in (Get-StealthTaskbarModelIds -StealthExe $StealthExe -ProfilePath $ProfilePath)) {
         Set-StealthAppUserModelDisplayName -ModelId $modelId -DisplayName "Stealth" -IconPath $iconExe
         Clear-StealthJumpListForModelId -ModelId $modelId

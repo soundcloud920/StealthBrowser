@@ -238,17 +238,25 @@ function Set-StealthToolkitOmniStyling {
     $monoFilter = "grayscale(1) brightness(0.4) contrast(1.12)"
     $patches = @{
         "chrome/toolkit/content/global/elements/moz-promo.css" = @"
-/* Stealth: monochrome default-browser and promo illustrations */
+/* Stealth: black default-browser promo + monochrome illustrations */
 .image-container img {
   filter: $monoFilter;
   opacity: 0.88;
 }
 
+:host,
+:host([type="default"]),
 :host([type="vibrant"]) {
-  --promo-message-text-color: var(--text-color);
-  --promo-heading-text-color: var(--promo-message-text-color);
-  --promo-background-color: color-mix(in lch, currentColor 8%, transparent);
-  --promo-border-color: color-mix(in lch, currentColor 8%, transparent);
+  --promo-message-text-color: #d0d0d0;
+  --promo-heading-text-color: #e8e8e8;
+  --promo-background-color: #000000;
+  --promo-border-color: #1a1a1a;
+}
+
+.container {
+  background-color: #000000;
+  border-color: #1a1a1a;
+  color: #d0d0d0;
 }
 "@
         "chrome/toolkit/content/global/elements/moz-page-nav-button.css" = @"
@@ -282,6 +290,68 @@ function Set-StealthToolkitOmniStyling {
     }
 }
 
+function Set-StealthBrowserOmniStyling {
+    param([System.IO.Compression.ZipArchive]$Zip)
+
+    $entryName = "chrome/browser/content/browser/aboutwelcome/aboutwelcome.css"
+    $entry = $Zip.GetEntry($entryName)
+    if (-not $entry) {
+        Write-SetupLog "Browser entry missing: $entryName" "Warn"
+        return
+    }
+
+    $reader = New-Object System.IO.StreamReader($entry.Open())
+    $css = $reader.ReadToEnd()
+    $reader.Close()
+
+    $block = @"
+/* Stealth: black default-browser / spotlight callout */
+:root,
+.onboardingContainer,
+#feature-callout,
+#feature-callout .onboardingContainer,
+#feature-callout .screen[pos=callout] .section-main .main-content {
+  --fc-background: #000000 !important;
+  --fc-background-dark: #000000 !important;
+  --fc-background-light: #000000 !important;
+  --fc-message-text-color: #d0d0d0 !important;
+  --fc-heading-text-color: #e8e8e8 !important;
+  --fc-button-background: #111111 !important;
+  --fc-button-background-hover: #1a1a1a !important;
+  --fc-button-background-active: #222222 !important;
+  --fc-button-text-color: #e8e8e8 !important;
+  --fc-primary-button-background: #00d9b8 !important;
+  --fc-primary-button-background-hover: #00e8c8 !important;
+  --fc-primary-button-background-active: #00c4a5 !important;
+  --fc-primary-button-text-color: #000000 !important;
+  --fc-dismiss-button-background: transparent !important;
+  --fc-dismiss-button-background-hover: #111111 !important;
+  --fc-dismiss-button-background-active: #1a1a1a !important;
+  --fc-dismiss-button-text-color: #d0d0d0 !important;
+  --fc-dismiss-button-text-color-hover: #ffffff !important;
+  background: #000000 !important;
+  background-color: #000000 !important;
+  color: #d0d0d0 !important;
+}
+
+#feature-callout .screen[pos=callout] .section-main .main-content {
+  border: 1px solid #1a1a1a !important;
+  box-shadow: none !important;
+}
+
+#feature-callout .screen[pos=callout] .section-main .dismiss-button,
+#feature-callout .screen[pos=callout] .section-main .more-button,
+#feature-callout button,
+#feature-callout .primary-button {
+  box-shadow: none !important;
+}
+"@
+
+    $css = Add-StealthOmniCssBlock -Css $css -Marker "/* Stealth: black default-browser" -Block $block
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($css)
+    Set-StealthOmniZipEntry -Zip $Zip -EntryName $entryName -Bytes $bytes
+}
+
 function Set-StealthOmniBranding {
     param(
         [string]$EngineRoot,
@@ -296,7 +366,7 @@ function Set-StealthOmniBranding {
     }
 
     $stampPath = Join-Path $EngineRoot ".omni-branded"
-    if ((Test-Path $stampPath) -and ((Get-Content $stampPath -Raw).Trim() -eq "6")) {
+    if ((Test-Path $stampPath) -and ((Get-Content $stampPath -Raw).Trim() -eq "7")) {
         return
     }
 
@@ -306,6 +376,8 @@ function Set-StealthOmniBranding {
 
     $zip = [System.IO.Compression.ZipFile]::Open($browserOmniPath, [System.IO.Compression.ZipArchiveMode]::Update)
     try {
+        Set-StealthBrowserOmniStyling -Zip $zip
+
         foreach ($entry in @($zip.Entries | Where-Object { $_.FullName -match 'branding/brand\.(ftl|properties)$' })) {
             $reader = New-Object System.IO.StreamReader($entry.Open())
             $text = Update-StealthBrandText -Text $reader.ReadToEnd()
@@ -345,7 +417,7 @@ function Set-StealthOmniBranding {
         Write-SetupLog "Patched toolkit/omni.ja settings styling" "Detail"
     }
 
-    Write-TextFileNoBom -Path $stampPath -Content "6"
+    Write-TextFileNoBom -Path $stampPath -Content "7"
     Write-SetupLog "Patched browser/omni.ja branding" "Detail"
 }
 
