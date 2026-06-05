@@ -50,10 +50,24 @@ $csc = @(
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $csc) { throw 'csc.exe not found (.NET Framework 4.x required)' }
 
-$psAutomation = [System.Reflection.Assembly]::LoadWithPartialName('System.Management.Automation').Location
-if (-not $psAutomation -or -not (Test-Path $psAutomation)) {
-    throw 'System.Management.Automation.dll not found'
+function Get-PowerShellAutomationDll {
+    $candidates = @(
+        (Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\System.Management.Automation.dll'),
+        (Join-Path $env:WINDIR 'SysWOW64\WindowsPowerShell\v1.0\System.Management.Automation.dll')
+    )
+    foreach ($path in $candidates) {
+        if (Test-Path $path) { return $path }
+    }
+
+    $loaded = [System.Reflection.Assembly]::LoadWithPartialName('System.Management.Automation')
+    if ($loaded -and $loaded.Location -and (Test-Path $loaded.Location)) {
+        return $loaded.Location
+    }
+
+    throw 'System.Management.Automation.dll not found (Windows PowerShell 5.1 required for setup build)'
 }
+
+$psAutomation = Get-PowerShellAutomationDll
 
 $payloadForEmbed = Join-Path (Split-Path $OutputPath -Parent) '_setup-payload.zip'
 Copy-Item $PayloadZip $payloadForEmbed -Force
