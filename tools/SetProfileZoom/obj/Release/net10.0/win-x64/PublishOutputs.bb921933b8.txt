@@ -1,0 +1,3 @@
+C:\Users\france\uuj-firefox-setup\tools\_publish\SetProfileZoom.pdb
+C:\Users\france\uuj-firefox-setup\tools\_publish\e_sqlite3.dll
+C:\Users\france\uuj-firefox-setup\tools\_publish\SetProfileZoom.exe

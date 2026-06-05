@@ -1,0 +1,8 @@
+_bundle/
+dist/
+bundle.zip
+Stealth.exe
+*.log
+.DS_Store
+Thumbs.db
+scripts/_extract/

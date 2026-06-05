@@ -1,0 +1,6 @@
+C:\Users\france\uuj-firefox-setup\tools\SetProfileZoom\obj\Debug\net10.0\SetProfileZoom.csproj.AssemblyReference.cache
+C:\Users\france\uuj-firefox-setup\tools\SetProfileZoom\obj\Debug\net10.0\SetProfileZoom.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\france\uuj-firefox-setup\tools\SetProfileZoom\obj\Debug\net10.0\SetProfileZoom.AssemblyInfoInputs.cache
+C:\Users\france\uuj-firefox-setup\tools\SetProfileZoom\obj\Debug\net10.0\SetProfileZoom.AssemblyInfo.cs
+C:\Users\france\uuj-firefox-setup\tools\SetProfileZoom\obj\Debug\net10.0\SetProfileZoom.csproj.CoreCompileInputs.cache
+C:\Users\france\uuj-firefox-setup\tools\SetProfileZoom\obj\Debug\net10.0\SetProfileZoom.sourcelink.json
