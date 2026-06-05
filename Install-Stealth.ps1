@@ -277,6 +277,81 @@ function Set-ProfilePref {
     Move-Item -Path $tmpPath -Destination $prefsPath -Force
 }
 
+function Remove-StealthLockedToolbarPrefsFromUserJs {
+    param([string]$ProfilePath)
+
+    $userJsPath = Join-Path $ProfilePath "user.js"
+    if (-not (Test-Path $userJsPath)) { return }
+
+    $tmpPath = Join-Path $ProfilePath ("user.{0}.tmp" -f [guid]::NewGuid().ToString("n"))
+    $removed = $false
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    $reader = $null
+    $writer = $null
+
+    try {
+        $reader = New-Object System.IO.StreamReader($userJsPath)
+        $writer = New-Object System.IO.StreamWriter($tmpPath, $false, $utf8NoBom)
+        while (($line = $reader.ReadLine()) -ne $null) {
+            if ($line -match '^\s*user_pref\("browser\.uiCustomization\.state"') {
+                $removed = $true
+                continue
+            }
+            $writer.WriteLine($line)
+        }
+    }
+    finally {
+        if ($reader) { $reader.Dispose() }
+        if ($writer) { $writer.Dispose() }
+    }
+
+    if (-not $removed) { return }
+
+    Move-Item -Path $tmpPath -Destination $userJsPath -Force
+    Write-SetupLog "Removed locked toolbar layout from user.js" "Detail"
+}
+
+function Import-StealthToolbarPrefOnce {
+    param(
+        [string]$ProfilePath,
+        [string]$ToolbarPrefsPath
+    )
+
+    if (-not (Test-Path $ToolbarPrefsPath)) { return }
+
+    $prefsPath = Join-Path $ProfilePath "prefs.js"
+    Repair-OversizedPrefsFile -ProfilePath $ProfilePath
+    if (-not (Test-Path $prefsPath)) {
+        New-Item -ItemType File -Path $prefsPath -Force | Out-Null
+    }
+
+    $reader = New-Object System.IO.StreamReader($prefsPath)
+    try {
+        while (($line = $reader.ReadLine()) -ne $null) {
+            if ($line -match '^\s*user_pref\("browser\.uiCustomization\.state"') {
+                return
+            }
+        }
+    }
+    finally {
+        $reader.Dispose()
+    }
+
+    $prefLine = (Get-Content $ToolbarPrefsPath -Raw).Trim()
+    if (-not $prefLine) { return }
+
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    $stream = New-Object System.IO.StreamWriter($prefsPath, $true, $utf8NoBom)
+    try {
+        $stream.WriteLine($prefLine)
+    }
+    finally {
+        $stream.Dispose()
+    }
+
+    Write-SetupLog "Seeded default toolbar layout in prefs.js (one-time)" "Detail"
+}
+
 function Set-ProfileDefaultSearch {
     param([string]$ProfilePath)
 
@@ -924,13 +999,14 @@ function Apply-StealthProfileBundle {
     if (Test-Path $localePrefsPath) {
         $userJs += "`n" + (Get-Content $localePrefsPath -Raw)
     }
-    if ((-not $marker) -and (Test-Path $toolbarPrefsPath)) {
-        $userJs += "`n" + (Get-Content $toolbarPrefsPath -Raw)
-    }
     if (Test-Path $searchPrefsPath) {
         $userJs += "`n" + (Get-Content $searchPrefsPath -Raw)
     }
     Write-TextFileNoBom -Path (Join-Path $ProfilePath "user.js") -Content $userJs
+    Remove-StealthLockedToolbarPrefsFromUserJs -ProfilePath $ProfilePath
+    if (-not $marker) {
+        Import-StealthToolbarPrefOnce -ProfilePath $ProfilePath -ToolbarPrefsPath $toolbarPrefsPath
+    }
     Set-ProfilePref -ProfilePath $ProfilePath -Name "taskbar.grouping.useprofile" -Value "false" -AsBool
     Set-ProfilePref -ProfilePath $ProfilePath -Name "browser.startup.blankWindow" -Value "false" -AsBool
     Set-ProfilePref -ProfilePath $ProfilePath -Name "browser.startup.homepage" -Value $homeUrl
