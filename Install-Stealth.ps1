@@ -178,7 +178,7 @@ function Initialize-BundleRoot {
     }
     if ($needsExtract) {
         if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
-        Expand-Archive -Path $sidecarZip -DestinationPath $dest -Force
+        Expand-StealthArchive -Path $sidecarZip -DestinationPath $dest
     }
     return $dest
 }

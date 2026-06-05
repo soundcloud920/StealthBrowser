@@ -2,8 +2,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
-using System.Management.Automation;
-using System.Management.Automation.Runspaces;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -115,26 +113,7 @@ namespace StealthBrowser
             if (!File.Exists(setup))
                 throw new FileNotFoundException("Setup.ps1 not found after extraction.", setup);
 
-            Directory.SetCurrentDirectory(installDir);
-
-            using (var ps = PowerShell.Create())
-            {
-                ps.AddScript(string.Format(
-                    "Set-Location -LiteralPath '{0}'; & '{1}'",
-                    installDir.Replace("'", "''"),
-                    setup.Replace("'", "''")));
-
-                ps.Invoke();
-
-                if (ps.HadErrors)
-                {
-                    var errors = ps.Streams.Error.ReadAll();
-                    if (errors != null && errors.Count > 0)
-                        throw new InvalidOperationException(errors[0].ToString());
-                }
-            }
-
-            return 0;
+            return RunPowerShellFile(installDir, setup, hidden: false);
         }
 
         internal static int RunInstallScript(string installDir, bool hidden)
@@ -143,26 +122,38 @@ namespace StealthBrowser
             if (!File.Exists(script))
                 throw new FileNotFoundException("Install-Stealth.ps1 not found after extraction.", script);
 
-            Directory.SetCurrentDirectory(installDir);
+            return RunPowerShellFile(installDir, script, hidden);
+        }
 
-            using (var ps = PowerShell.Create())
+        private static int RunPowerShellFile(string installDir, string scriptPath, bool hidden)
+        {
+            string windowStyle = hidden ? "Hidden" : "Normal";
+            var psi = new ProcessStartInfo
             {
-                ps.AddScript(string.Format(
-                    "Set-Location -LiteralPath '{0}'; & '{1}'",
-                    installDir.Replace("'", "''"),
-                    script.Replace("'", "''")));
+                FileName = "powershell.exe",
+                Arguments = string.Format(
+                    "-NoProfile -ExecutionPolicy Bypass -WindowStyle {0} -File \"{1}\"",
+                    windowStyle,
+                    scriptPath),
+                WorkingDirectory = installDir,
+                UseShellExecute = false,
+            };
 
-                ps.Invoke();
+            if (hidden)
+                psi.CreateNoWindow = true;
 
-                if (ps.HadErrors)
-                {
-                    var errors = ps.Streams.Error.ReadAll();
-                    if (errors != null && errors.Count > 0)
-                        throw new InvalidOperationException(errors[0].ToString());
-                }
+            using (Process proc = Process.Start(psi))
+            {
+                if (proc == null)
+                    throw new InvalidOperationException("Failed to start PowerShell.");
+
+                proc.WaitForExit();
+                if (proc.ExitCode != 0)
+                    throw new InvalidOperationException(
+                        string.Format("Setup script failed with exit code {0}.", proc.ExitCode));
+
+                return proc.ExitCode;
             }
-
-            return 0;
         }
     }
 }

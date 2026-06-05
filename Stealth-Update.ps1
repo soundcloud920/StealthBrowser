@@ -1,5 +1,24 @@
 ﻿#Requires -Version 5.1
 
+function Expand-StealthArchive {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$DestinationPath
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Archive not found: $Path"
+    }
+
+    if (Test-Path -LiteralPath $DestinationPath) {
+        Remove-Item -LiteralPath $DestinationPath -Recurse -Force
+    }
+    New-Item -ItemType Directory -Force -Path $DestinationPath | Out-Null
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($Path, $DestinationPath)
+}
+
 function Get-StealthAppDir {
     return Join-Path $env:LOCALAPPDATA "StealthBrowser"
 }
@@ -291,7 +310,7 @@ function Install-StealthReleaseUpdate {
 
     try {
         Invoke-WebRequest -Uri $Release.DownloadUrl -OutFile $zipPath -UseBasicParsing
-        Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+        Expand-StealthArchive -Path $zipPath -DestinationPath $extractDir
 
         $remoteVersionPath = Join-Path $extractDir "version.json"
         if (-not (Test-Path $remoteVersionPath)) {
