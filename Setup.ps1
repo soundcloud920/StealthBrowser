@@ -415,7 +415,7 @@ foreach ($option in $script:searchOptions) {
 }
 $defaultSearchIndex = 0
 for ($i = 0; $i -lt $script:searchOptions.Count; $i++) {
-    if ($script:searchOptions[$i].Id -eq "Google") {
+    if ($script:searchOptions[$i].Id -eq "Stealth") {
         $defaultSearchIndex = $i
         break
     }
@@ -426,7 +426,7 @@ $form.Controls.Add($comboSearch) | Out-Null
 function Get-SelectedSearchEngine {
     $index = $comboSearch.SelectedIndex
     if ($index -lt 0 -or $index -ge $script:searchOptions.Count) {
-        return "Google"
+        return "Stealth"
     }
     return $script:searchOptions[$index].Id
 }

@@ -6,11 +6,13 @@ using K4os.Compression.LZ4;
 
 if (args.Length < 1)
 {
-    Console.Error.WriteLine("Usage: SetProfileSearch <profilePath|search.json.mozlz4> [Google|DuckDuckGo|Bing|SearXNG]");
+    Console.Error.WriteLine("Usage: SetProfileSearch <profilePath|search.json.mozlz4> [Stealth|Google|DuckDuckGo|Bing|SearXNG]");
     return 1;
 }
 
-var provider = ResolveProvider(args.Length >= 2 ? args[1] : "Google");
+const string StealthIconDataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACIElEQVR42rVTMWhTURQ9971aISgtZJCAk1MRh+LUxbaCunRyqFji6CAtkZLBDiV82locXDKF0rrULCVQKEQ3Q6CEmPYbww8oyRD4H1ryBf8gH6RJvjkObTRULQ564MGD++675557LvCPISS1YRjqdMAwDEVSAxD8DwgAjIyMhDc2Np4kEokpACApJAUAFhYWxpPJ5KNwOHyxPwckJZPJaACYm5u7T5KmaX4AENJaQ2sNAOdLpdJ7kpyfn78HAJlMRpOUAREhgG8AxDTNws7OzvrBwYEJ4CgIAgEAEWlXKpUXnueNWZa194O2CPF0eflhJBIJify9Nkoda5xKpR6rG+Pj1zc3N5+RDCmloLVGPp8fOGlLejqQHCCpSEq320U6nb47Ojp6B6lU6opt203btmuxWGwMQKiP4u8IDJqm+fLw8LC1vb09BQDY3d01SLJcLldqtVoxHo/f3traugVgcGhoaDgajUZWV1dvZrPZxLv9/ZLv+0eO45R6U1AALliWVSTJVqvVdhzHd133Sy6Xe9VoND4WCoU33mePju24JOl5XmdlZWVSKXXsMBHBxMTE5Wq1+pY/0e5dgiAgyYAkXdf119bWHvQVP/7kpL/hbDb7vNls+jyFTqdDy7L2FhcXJ/uTpd/rS0tLXQCITk9fnZ6ZmboUiVzTWp/zff9TvV4vzs7OvgbwlaQSke6flkmdNf+z4r9s3slRJHXPF6fffgftqlLGDsptBwAAAABJRU5ErkJggg==";
+
+var provider = ResolveProvider(args.Length >= 2 ? args[1] : "Stealth");
 var target = args[0];
 var searchPath = target.EndsWith("search.json.mozlz4", StringComparison.OrdinalIgnoreCase)
     ? target
@@ -23,13 +25,18 @@ var defaultEngine = root["metaData"]?["default"]?.GetValue<string>() ?? provider
 Console.WriteLine($"OK default={defaultEngine}");
 return 0;
 
-static SearchProvider ResolveProvider(string? value)
+SearchProvider ResolveProvider(string? value)
 {
-    var requested = string.IsNullOrWhiteSpace(value) ? "Google" : value.Trim();
+    var requested = string.IsNullOrWhiteSpace(value) ? "Stealth" : value.Trim();
     if (requested.Equals("Chrome", StringComparison.OrdinalIgnoreCase) ||
         requested.Equals("Google Chrome", StringComparison.OrdinalIgnoreCase))
     {
         requested = "Google";
+    }
+    else if (requested.Equals("Stealth Google", StringComparison.OrdinalIgnoreCase) ||
+             requested.Equals("StealthGoogle", StringComparison.OrdinalIgnoreCase))
+    {
+        requested = "Stealth";
     }
     else if (requested.Equals("DDG", StringComparison.OrdinalIgnoreCase))
     {
@@ -52,28 +59,38 @@ static SearchProvider ResolveProvider(string? value)
     return GetProviders()[0];
 }
 
-static SearchProvider[] GetProviders()
+SearchProvider[] GetProviders()
 {
     return
     [
+        new SearchProvider(
+            "Stealth",
+            "Stealth",
+            "https://www.google.com/",
+            "https://www.google.com/search",
+            [new SearchParam("q", "{searchTerms}")],
+            StealthIconDataUrl),
         new SearchProvider(
             "Google",
             "Google",
             "https://www.google.com/",
             "https://www.google.com/search",
-            [new SearchParam("q", "{searchTerms}")]),
+            [new SearchParam("q", "{searchTerms}")],
+            null),
         new SearchProvider(
             "DuckDuckGo",
             "DuckDuckGo",
             "https://duckduckgo.com/",
             "https://duckduckgo.com/",
-            [new SearchParam("q", "{searchTerms}")]),
+            [new SearchParam("q", "{searchTerms}")],
+            null),
         new SearchProvider(
             "Bing",
             "Bing",
             "https://www.bing.com/",
             "https://www.bing.com/search",
-            [new SearchParam("q", "{searchTerms}")]),
+            [new SearchParam("q", "{searchTerms}")],
+            null),
         new SearchProvider(
             "SearXNG",
             "SearXNG",
@@ -82,7 +99,8 @@ static SearchProvider[] GetProviders()
             [
                 new SearchParam("q", "{searchTerms}"),
                 new SearchParam("language", "ru-RU")
-            ]),
+            ],
+            null),
     ];
 }
 
@@ -186,7 +204,7 @@ static JsonObject CreateEngine(SearchProvider provider)
         });
     }
 
-    return new JsonObject
+    var engine = new JsonObject
     {
         ["_name"] = provider.Name,
         ["_isAppProvided"] = false,
@@ -210,6 +228,19 @@ static JsonObject CreateEngine(SearchProvider provider)
         },
         ["params"] = urlParams
     };
+
+    if (!string.IsNullOrWhiteSpace(provider.IconUrl))
+    {
+        engine["_iconURL"] = provider.IconUrl;
+        engine["iconURL"] = provider.IconUrl;
+        engine["iconMapObj"] = new JsonObject
+        {
+            ["16"] = provider.IconUrl,
+            ["32"] = provider.IconUrl
+        };
+    }
+
+    return engine;
 }
 
 static string DecodeMozLz4(byte[] data)
@@ -258,6 +289,7 @@ sealed record SearchProvider(
     string Name,
     string SearchForm,
     string SearchTemplate,
-    SearchParam[] Params);
+    SearchParam[] Params,
+    string? IconUrl);
 
 sealed record SearchParam(string Name, string Value);

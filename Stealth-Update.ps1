@@ -58,6 +58,18 @@ function Install-StealthLauncherFiles {
         if (-not (Test-Path $src)) { continue }
         Copy-Item $src (Join-Path $appDir $file) -Force
     }
+
+    $srcTools = Join-Path $InstallScriptDir "tools"
+    if (Test-Path $srcTools) {
+        $destTools = Join-Path $appDir "tools"
+        New-Item -ItemType Directory -Force -Path $destTools | Out-Null
+        foreach ($file in @("SetProfileSearch.exe", "SetProfileZoom.exe", "e_sqlite3.dll")) {
+            $src = Join-Path $srcTools $file
+            if (Test-Path $src) {
+                Copy-Item $src (Join-Path $destTools $file) -Force
+            }
+        }
+    }
 }
 
 function Get-StealthLaunchConfigPath {
@@ -75,7 +87,7 @@ function Get-StealthLaunchConfig {
         StealthExe            = [string]$obj.stealthExe
         SetupVersion          = [string]$obj.setupVersion
         EngineVersion         = [string]$obj.engineVersion
-        SearchEngine          = if ($obj.searchEngine) { [string]$obj.searchEngine } else { "Google" }
+        SearchEngine          = if ($obj.searchEngine) { [string]$obj.searchEngine } else { "Stealth" }
         DismissedVersion      = if ($obj.dismissedVersion) { [string]$obj.dismissedVersion } else { $null }
         LastUpdateCheckUtc    = if ($obj.lastUpdateCheckUtc) { [string]$obj.lastUpdateCheckUtc } else { $null }
         LastUpdateCheckLatest = if ($obj.lastUpdateCheckLatest) { [string]$obj.lastUpdateCheckLatest } else { $null }
@@ -148,7 +160,7 @@ function Write-StealthLaunchConfig {
         $SearchEngine = $existing.SearchEngine
     }
     if ([string]::IsNullOrWhiteSpace($SearchEngine)) {
-        $SearchEngine = "Google"
+        $SearchEngine = "Stealth"
     }
 
     $config = @{
@@ -333,7 +345,7 @@ function Install-StealthReleaseUpdate {
         Push-Location $extractDir
         try {
             . (Join-Path $extractDir "Install-Stealth.ps1")
-            $searchEngine = if ($localCfg -and $localCfg.SearchEngine) { $localCfg.SearchEngine } else { "Google" }
+            $searchEngine = if ($localCfg -and $localCfg.SearchEngine -and $localCfg.SearchEngine -ne "Google") { $localCfg.SearchEngine } else { "Stealth" }
             Invoke-StealthSetup -ProfileOnly:$profileOnly -LaunchWhenDone:$false -SearchEngine $searchEngine
         }
         finally {

@@ -543,8 +543,38 @@ function Get-StealthBundleDistributionDir {
     return $null
 }
 
+function Get-StealthSearchIconDataUrl {
+    foreach ($path in @(
+            (Join-Path $script:InstallScriptDir "bundle\assets\search-face-16.png"),
+            (Join-Path $script:InstallScriptDir "_bundle\assets\search-face-16.png"),
+            (Join-Path $script:InstallScriptDir "branding\search-face-32.png")
+        )) {
+        if (-not (Test-Path $path)) { continue }
+        try {
+            $bytes = [System.IO.File]::ReadAllBytes($path)
+            return "data:image/png;base64,$([Convert]::ToBase64String($bytes))"
+        }
+        catch {
+            continue
+        }
+    }
+    return "https://www.google.com/favicon.ico"
+}
+
 function Get-StealthSearchEngineOptions {
     return @(
+        [PSCustomObject]@{
+            Id            = "Stealth"
+            Name          = "Stealth"
+            SearchForm    = "https://www.google.com/"
+            SearchTemplate = "https://www.google.com/search"
+            URLTemplate   = "https://www.google.com/search?q={searchTerms}"
+            Encoding      = "UTF-8"
+            Method        = "GET"
+            IconURL       = Get-StealthSearchIconDataUrl
+            AddToPolicy   = $true
+            CopySearchPlugins = $false
+        },
         [PSCustomObject]@{
             Id            = "Google"
             Name          = "Google"
@@ -555,6 +585,7 @@ function Get-StealthSearchEngineOptions {
             Method        = "GET"
             IconURL       = "https://www.google.com/favicon.ico"
             AddToPolicy   = $false
+            CopySearchPlugins = $false
         },
         [PSCustomObject]@{
             Id            = "DuckDuckGo"
@@ -566,6 +597,7 @@ function Get-StealthSearchEngineOptions {
             Method        = "GET"
             IconURL       = "https://duckduckgo.com/favicon.ico"
             AddToPolicy   = $false
+            CopySearchPlugins = $false
         },
         [PSCustomObject]@{
             Id            = "Bing"
@@ -577,6 +609,7 @@ function Get-StealthSearchEngineOptions {
             Method        = "GET"
             IconURL       = "https://www.bing.com/favicon.ico"
             AddToPolicy   = $false
+            CopySearchPlugins = $false
         },
         [PSCustomObject]@{
             Id            = "SearXNG"
@@ -588,15 +621,16 @@ function Get-StealthSearchEngineOptions {
             Method        = "GET"
             IconURL       = "https://searx.tiekoetter.com/static/themes/simple/img/favicon.png"
             AddToPolicy   = $true
+            CopySearchPlugins = $true
         }
     )
 }
 
 function Resolve-StealthSearchEngine {
-    param([string]$SearchEngine = "Google")
+    param([string]$SearchEngine = "Stealth")
 
     if ([string]::IsNullOrWhiteSpace($SearchEngine)) {
-        return "Google"
+        return "Stealth"
     }
 
     $value = $SearchEngine.Trim()
@@ -610,11 +644,11 @@ function Resolve-StealthSearchEngine {
         }
     }
 
-    return "Google"
+    return "Stealth"
 }
 
 function Get-StealthSearchEngineDefinition {
-    param([string]$SearchEngine = "Google")
+    param([string]$SearchEngine = "Stealth")
 
     $id = Resolve-StealthSearchEngine -SearchEngine $SearchEngine
     foreach ($option in (Get-StealthSearchEngineOptions)) {
@@ -626,13 +660,13 @@ function Get-StealthSearchEngineDefinition {
 }
 
 function Get-StealthSearchEngineDisplayName {
-    param([string]$SearchEngine = "Google")
+    param([string]$SearchEngine = "Stealth")
     return (Get-StealthSearchEngineDefinition -SearchEngine $SearchEngine).Name
 }
 
 function Get-StealthDistributionPoliciesObject {
     param(
-        [string]$SearchEngine = "Google",
+        [string]$SearchEngine = "Stealth",
         [string]$EngineVersion = "151.0.3"
     )
 
@@ -689,7 +723,7 @@ function Get-StealthDistributionPoliciesObject {
 function Write-StealthDistributionPolicies {
     param(
         [string]$EngineRoot,
-        [string]$SearchEngine = "Google",
+        [string]$SearchEngine = "Stealth",
         [string]$EngineVersion = "151.0.3"
     )
 
@@ -713,12 +747,13 @@ function Write-StealthDistributionPolicies {
     }
 
     $destPlugins = Join-Path $distDir "searchplugins"
-    if (-not $search.AddToPolicy -and (Test-Path $destPlugins)) {
+    $copySearchPlugins = [bool]$search.CopySearchPlugins
+    if (-not $copySearchPlugins -and (Test-Path $destPlugins)) {
         Remove-Item $destPlugins -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     $srcDistribution = Get-StealthBundleDistributionDir
-    if ($search.AddToPolicy -and $srcDistribution) {
+    if ($copySearchPlugins -and $srcDistribution) {
         $srcPlugins = Join-Path $srcDistribution "searchplugins"
         if (Test-Path $srcPlugins) {
             if (Test-Path $destPlugins) {
@@ -732,7 +767,7 @@ function Write-StealthDistributionPolicies {
 function Install-StealthDistributionConfig {
     param(
         [string]$EngineRoot,
-        [string]$SearchEngine = "Google",
+        [string]$SearchEngine = "Stealth",
         [string]$EngineVersion = "151.0.3"
     )
 
@@ -745,7 +780,7 @@ function Install-StealthDistributionConfig {
 function Sync-StealthEngine {
     param(
         [string]$Version = "151.0.3",
-        [string]$SearchEngine = "Google"
+        [string]$SearchEngine = "Stealth"
     )
 
     $engineRoot = Get-StealthEngineRoot

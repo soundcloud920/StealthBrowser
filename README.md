@@ -2,7 +2,7 @@
 
 **Stealth** — приватный браузер на движке Mozilla Firefox, собранный в один установщик под Windows 10/11. Не форк. Не «сборка с вирусами». Готовый профиль, политики движка, лаунчер и автообновление — всё из коробки.
 
-**Текущая версия: `1.0.4-beta`**
+**Текущая версия: `1.0.5-beta`**
 
 ---
 
@@ -12,8 +12,8 @@
 
 | Файл | Для кого |
 |------|----------|
-| **`StealthBrowser-Setup-v1.0.4-beta.exe`** | Обычная установка — двойной клик |
-| **`StealthBrowser-setup-v1.0.4-beta.zip`** | Портатив / разработчики |
+| **`StealthBrowser-Setup-v1.0.5-beta.exe`** | Обычная установка — двойной клик |
+| **`StealthBrowser-setup-v1.0.5-beta.zip`** | Портатив / разработчики |
 
 ---
 
@@ -56,7 +56,7 @@
 | **Safe Browsing** | Запросы к Google/Mozilla | **Отключён** — URL не уходят на проверку |
 | **ETP (Tracking Protection)** | Включён в движке | **Выключен** — фильтрация через **uBlock Origin** + **LocalCDN** (меньше дублирования работы в content process) |
 | **Pocket / спонсоры / Suggest** | Включены | Pocket, Contile, QuickSuggest, ML-chat — off |
-| **Поиск по умолчанию** | Google / региональный | Выбирается в установщике: **Google** по умолчанию, DuckDuckGo / Bing / SearXNG опционально |
+| **Поиск по умолчанию** | Google / региональный | Выбирается в установщике: **Stealth** по умолчанию, Google backend; чистый Google / DuckDuckGo / Bing / SearXNG опционально |
 | **New Tab** | Лента, реклама, телеметрия ленты | **Выключен** — `blanktab.html` |
 | **Сессии / автовосстановление** | Агрессивный sessionstore | `restore_on_demand`, интервал записи **60 с**, меньше дискового IO |
 | **Prefetch / speculative** | Включены | `network.prefetch-next=false`, `speculative-parallel-limit=0`, `urlbar.speculativeConnect=false` |
@@ -171,17 +171,23 @@ user_pref("toolkit.cosmeticAnimations.enabled", false);
 
 Ошибки сети (`about:neterror`), все `about:` страницы, SearXNG — единый стиль, шрифт LLG_Relicus, без лисы на экране ошибки.
 
-### 8. Поиск — выбор при установке, Google по умолчанию
+### 8. Поиск — Stealth-визуал, Google backend
 
 Политика **на уровне движка** (не «пользователь забыл сменить»):
 
 ```json
 "SearchEngines": {
-  "Default": "Google"
+  "Default": "Stealth",
+  "Add": [
+    {
+      "Name": "Stealth",
+      "URLTemplate": "https://www.google.com/search?q={searchTerms}"
+    }
+  ]
 }
 ```
 
-Если в установщике выбран SearXNG, Stealth добавляет его в профиль и применяет прежние CSS/JS-настройки страницы. В остальных случаях кастомный поисковик не навязывается.
+По умолчанию выбран **Stealth**: в браузере и на странице поиска остается старый черный Stealth-визуал, но запросы уходят в Google. Чистый **Google**, DuckDuckGo, Bing и SearXNG остаются в установщике как ручной выбор.
 
 ### 9. Движок — pinned Firefox, без сюрпризов от апдейтов
 
@@ -226,7 +232,7 @@ user_pref("toolkit.cosmeticAnimations.enabled", false);
 ## УСТАНОВКА
 
 1. Закрой **Stealth** и **Firefox** полностью (проверь диспетчер задач).
-2. Скачай **`StealthBrowser-Setup-v1.0.4-beta.exe`** из [Releases](https://github.com/soundcloud920/StealthBrowser/releases/latest).
+2. Скачай **`StealthBrowser-Setup-v1.0.5-beta.exe`** из [Releases](https://github.com/soundcloud920/StealthBrowser/releases/latest).
 3. Запусти → **Install** → мастер StealthBrowser → **Установить**.
 4. Браузер откроется с профилем `*.stealth`.
 5. Дальше — ярлык **Stealth** на рабочем столе / в Пуске.
@@ -234,7 +240,7 @@ user_pref("toolkit.cosmeticAnimations.enabled", false);
 Тихая установка:
 
 ```bat
-StealthBrowser-Setup-v1.0.4-beta.exe /install /search=Google
+StealthBrowser-Setup-v1.0.5-beta.exe /install /search=Stealth
 ```
 
 ### Только обновить профиль (движок уже стоит)
@@ -278,8 +284,8 @@ StealthBrowser-Setup-v1.0.4-beta.exe /install /search=Google
 
 Артефакты в `dist/`:
 
-- `StealthBrowser-Setup-v1.0.4-beta.exe`
-- `StealthBrowser-setup-v1.0.4-beta.zip`
+- `StealthBrowser-Setup-v1.0.5-beta.exe`
+- `StealthBrowser-setup-v1.0.5-beta.zip`
 
 Тег `v*` на GitHub → CI собирает и публикует в Releases.
 
@@ -287,7 +293,7 @@ StealthBrowser-Setup-v1.0.4-beta.exe /install /search=Google
 
 ## BETA
 
-`1.0.4-beta` — фикс преждевременного завершения установщика при запуске от администратора + проверка создания ярлыков. `1.0.3-beta` — фикс окна Firefox downgrade protection для профилей, ранее открытых более новым движком. `1.0.2-beta` — pinned Firefox engine + отключение Firefox update paths + фикс silent setup args. `1.0.1-beta` — выбор поисковика в установщике, Google по умолчанию. `1.0.0-beta` — первый публичный срез после перезапуска репозитория. Ожидай:
+`1.0.5-beta` — поисковик Stealth с Google backend + Stealth CSS для страниц Google. `1.0.4-beta` — фикс преждевременного завершения установщика при запуске от администратора + проверка создания ярлыков. `1.0.3-beta` — фикс окна Firefox downgrade protection для профилей, ранее открытых более новым движком. `1.0.2-beta` — pinned Firefox engine + отключение Firefox update paths + фикс silent setup args. `1.0.1-beta` — выбор поисковика в установщике. `1.0.0-beta` — первый публичный срез после перезапуска репозитория. Ожидай:
 
 - возможные баги в edge-case сайтах;
 - обновления профиля через Releases;
@@ -307,7 +313,7 @@ StealthBrowser/
 ├── Stealth-Update.ps1          # GitHub releases API
 ├── Stealth-ApplyUpdate.ps1     # Применение обновления (видимая консоль)
 ├── Stealth-Engine.ps1          # Брендинг движка
-├── version.json                # 1.0.4-beta
+├── version.json                # 1.0.5-beta
 ├── bundle/                     # Шаблоны профиля (LFS)
 │   └── templates/
 │       ├── user.js
@@ -326,4 +332,4 @@ StealthBrowser/
 
 ---
 
-**StealthBrowser** · Relicyos · `1.0.4-beta`
+**StealthBrowser** · Relicyos · `1.0.5-beta`

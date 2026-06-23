@@ -1,7 +1,7 @@
 ﻿#Requires -Version 5.1
 param(
     [switch]$ProfileOnly,
-    [string]$SearchEngine = "Google"
+    [string]$SearchEngine = "Stealth"
 )
 
 $ErrorActionPreference = "Stop"
@@ -141,7 +141,7 @@ function Get-SetupVersion {
         return [PSCustomObject]@{
             ProductName  = "StealthBrowser"
             GitHubRepo   = "soundcloud920/StealthBrowser"
-            SetupVersion = "1.0.4-beta"
+            SetupVersion = "1.0.5-beta"
             EngineVersion = "151.0.3"
             EngineLang   = "ru"
         }
@@ -356,7 +356,7 @@ function Import-StealthToolbarPrefOnce {
 function Set-ProfileDefaultSearch {
     param(
         [string]$ProfilePath,
-        [string]$SearchEngine = "Google"
+        [string]$SearchEngine = "Stealth"
     )
 
     $searchTool = Join-Path $script:InstallScriptDir "tools\SetProfileSearch.exe"
@@ -719,7 +719,7 @@ function Install-StealthIfNeeded {
     param(
         [string]$Version = "151.0.3",
         [string]$Lang = "ru",
-        [string]$SearchEngine = "Google"
+        [string]$SearchEngine = "Stealth"
     )
 
     $engine = Get-StealthEngineSource
@@ -865,7 +865,7 @@ function Write-StealthProfileMarker {
     param(
         [string]$ProfilePath,
         [string]$SetupVersion,
-        [string]$SearchEngine = "Google"
+        [string]$SearchEngine = "Stealth"
     )
 
     $chromeDir = Join-Path $ProfilePath "chrome"
@@ -1032,7 +1032,7 @@ function Apply-StealthProfileBundle {
         [string]$Root,
         [string]$ProfilePath,
         [string]$SetupVersion,
-        [string]$SearchEngine = "Google"
+        [string]$SearchEngine = "Stealth"
     )
 
     $marker = Get-StealthProfileMarker -ProfilePath $ProfilePath
@@ -1109,7 +1109,7 @@ function Invoke-StealthSetup {
     param(
         [switch]$LaunchWhenDone,
         [switch]$ProfileOnly,
-        [string]$SearchEngine = "Google"
+        [string]$SearchEngine = "Stealth"
     )
 
     $cfg = Get-SetupVersion
