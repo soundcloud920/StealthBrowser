@@ -33,7 +33,11 @@ $dist = Join-Path $SourceDir 'dist'
 if (-not $OutputPath) {
     $OutputPath = Join-Path $dist "StealthBrowser-Setup-v$Version.exe"
 }
-New-Item -ItemType Directory -Force -Path (Split-Path $OutputPath -Parent) | Out-Null
+$outputDir = Split-Path $OutputPath -Parent
+if (-not $outputDir) {
+    $outputDir = (Get-Location).Path
+}
+New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 
 $iconPath = Join-Path $SourceDir 'branding\stealth-dark.ico'
 if (-not (Test-Path $iconPath)) {
@@ -50,7 +54,7 @@ $csc = @(
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $csc) { throw 'csc.exe not found (.NET Framework 4.x required)' }
 
-$payloadForEmbed = Join-Path (Split-Path $OutputPath -Parent) '_setup-payload.zip'
+$payloadForEmbed = Join-Path $outputDir '_setup-payload.zip'
 Copy-Item $PayloadZip $payloadForEmbed -Force
 
 try {

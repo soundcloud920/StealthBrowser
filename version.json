@@ -1,7 +1,7 @@
 {
   "productName": "StealthBrowser",
   "githubRepo": "soundcloud920/StealthBrowser",
-  "setupVersion": "1.0.1-beta",
+  "setupVersion": "1.0.2-beta",
   "engineVersion": "151.0.3",
   "engineLang": "ru",
   "channel": "beta"

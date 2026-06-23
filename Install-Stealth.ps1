@@ -141,7 +141,7 @@ function Get-SetupVersion {
         return [PSCustomObject]@{
             ProductName  = "StealthBrowser"
             GitHubRepo   = "soundcloud920/StealthBrowser"
-            SetupVersion = "1.0.0-beta"
+            SetupVersion = "1.0.2-beta"
             EngineVersion = "151.0.3"
             EngineLang   = "ru"
         }
@@ -513,7 +513,10 @@ function Get-MozillaFirefoxInstallerUrl {
 }
 
 function Wait-MozillaFirefoxInstalled {
-    param([int]$MaxWaitSeconds = 300)
+    param(
+        [string]$Version,
+        [int]$MaxWaitSeconds = 300
+    )
 
     Write-SetupLog "Waiting for Firefox installation to finish..." "Detail"
     $deadline = (Get-Date).AddSeconds($MaxWaitSeconds)
@@ -521,8 +524,12 @@ function Wait-MozillaFirefoxInstalled {
     while ((Get-Date) -lt $deadline) {
         $source = Get-MozillaFirefoxSource
         if ($source) {
-            Write-SetupLog "Mozilla Firefox $($source.Version) ready" "Ok"
-            return $source
+            if (-not $Version -or (Test-StealthEngineVersionCompatible -Installed $source.Version -Wanted $Version)) {
+                Write-SetupLog "Mozilla Firefox $($source.Version) ready" "Ok"
+                return $source
+            }
+
+            Write-SetupLog "Mozilla Firefox $($source.Version) found, waiting for pinned $Version..." "Detail"
         }
 
         $remaining = [Math]::Max(0, [int]($deadline - (Get-Date)).TotalSeconds)
@@ -539,6 +546,21 @@ function Wait-MozillaFirefoxInstalled {
         Start-Sleep -Seconds 2
     }
     return $null
+}
+
+function Get-StealthMozillaUpdateTaskRemovalScript {
+    @'
+$ErrorActionPreference = 'SilentlyContinue'
+$tasks = Get-ScheduledTask | Where-Object {
+    $_.TaskName -like '*Firefox*Background*Update*' -or
+    $_.TaskName -like '*Firefox*Default*Browser*Agent*'
+}
+foreach ($task in $tasks) {
+    Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath | Out-Null
+    Unregister-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -Confirm:$false | Out-Null
+}
+exit 0
+'@
 }
 
 function Get-StealthMaintenanceRemovalScript {
@@ -644,6 +666,17 @@ function Remove-MozillaMaintenanceService {
     }
 }
 
+function Remove-MozillaUpdateTasks {
+    Write-SetupLog "Removing Mozilla background update tasks..." "Detail"
+    $exitCode = Invoke-StealthElevatedSilently -Script (Get-StealthMozillaUpdateTaskRemovalScript)
+    if ($exitCode -ne 0) {
+        Write-SetupLog "Background update task removal exit code: $exitCode" "Warn"
+    }
+    else {
+        Write-SetupLog "Mozilla background update tasks disabled" "Ok"
+    }
+}
+
 function Stop-StealthProcess {
     param([int]$MaxWaitSeconds = 20)
 
@@ -677,6 +710,12 @@ function Install-StealthIfNeeded {
         [string]$Lang = "ru",
         [string]$SearchEngine = "Google"
     )
+
+    $engine = Get-StealthEngineSource
+    if ($engine -and (Test-StealthEngineVersionCompatible -Installed $engine.Version -Wanted $Version)) {
+        Write-SetupProgress -Percent 58 -Message "Движок Stealth уже закреплен на $Version..."
+        return Sync-StealthEngine -Version $Version -SearchEngine $SearchEngine
+    }
 
     $source = Get-MozillaFirefoxSource
     if ($source -and (Test-StealthEngineVersionCompatible -Installed $source.Version -Wanted $Version)) {
@@ -714,18 +753,23 @@ if (`$proc.ExitCode -ne 0) { exit `$proc.ExitCode }
 Start-Sleep -Seconds 5
 $(Get-StealthFirefoxShortcutRemovalScript)
 $(Get-StealthMaintenanceRemovalScript)
+$(Get-StealthMozillaUpdateTaskRemovalScript)
 "@
     $exitCode = Invoke-StealthElevatedSilently -Script $engineScript
     if ($exitCode -ne 0) {
         throw "Stealth installer exited with code $exitCode"
     }
 
-    $source = Wait-MozillaFirefoxInstalled
+    $source = Wait-MozillaFirefoxInstalled -Version $Version
     if (-not $source) {
-        throw "Firefox install finished but Mozilla Firefox was not found."
+        throw "Firefox install finished, but pinned Mozilla Firefox $Version was not found."
+    }
+    if (-not (Test-StealthEngineVersionCompatible -Installed $source.Version -Wanted $Version)) {
+        throw "Pinned Firefox install failed. Expected $Version, got $($source.Version)."
     }
 
     Remove-MozillaFirefoxShortcuts
+    Remove-MozillaUpdateTasks
     Write-SetupProgress -Percent 58 -Message "Патч брендинга Stealth..."
     return Sync-StealthEngine -Version $Version -SearchEngine $SearchEngine
 }
@@ -1068,6 +1112,7 @@ function Invoke-StealthSetup {
 
     Write-SetupProgress -Percent 62 -Message "Удаление Mozilla Maintenance Service..."
     Remove-MozillaMaintenanceService
+    Remove-MozillaUpdateTasks
 
     Write-SetupProgress -Percent 68 -Message "Подготовка профиля Stealth..."
     Write-Step "Preparing Stealth profile..."
@@ -1098,7 +1143,8 @@ function Invoke-StealthSetup {
         -ProfilePath $profilePath `
         -StealthExe $stealthExe `
         -SetupVersion $cfg.SetupVersion `
-        -EngineVersion $cfg.EngineVersion
+        -EngineVersion $cfg.EngineVersion `
+        -SearchEngine $SearchEngine
 
     if ($LaunchWhenDone) {
         Write-SetupProgress -Percent 95 -Message "Запуск Stealth..."

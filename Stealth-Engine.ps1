@@ -4,22 +4,46 @@ function Get-StealthEngineRoot {
     return Join-Path (Get-StealthAppDir) "Engine"
 }
 
+function Get-StealthFirefoxExeVersion {
+    param([string]$Path)
+
+    if (-not $Path -or -not (Test-Path $Path)) { return $null }
+
+    $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($Path)
+    if ($info.ProductVersion -match "(\d+\.\d+\.\d+)") {
+        return $Matches[1]
+    }
+    return $info.ProductVersion
+}
+
 function Get-MozillaFirefoxSource {
     foreach ($path in @(
             (Join-Path ${env:ProgramFiles} "Mozilla Firefox\firefox.exe"),
             (Join-Path ${env:ProgramFiles(x86)} "Mozilla Firefox\firefox.exe")
         )) {
         if (-not (Test-Path $path)) { continue }
-        $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($path)
-        if ($info.ProductVersion -match "(\d+\.\d+\.\d+)") {
+        $version = Get-StealthFirefoxExeVersion -Path $path
+        if ($version) {
             return [PSCustomObject]@{
                 Path    = $path
                 Dir     = Split-Path $path -Parent
-                Version = $Matches[1]
+                Version = $version
             }
         }
     }
     return $null
+}
+
+function Get-StealthEngineSource {
+    $engineExe = Join-Path (Get-StealthEngineRoot) "firefox.exe"
+    $version = Get-StealthFirefoxExeVersion -Path $engineExe
+    if (-not $version) { return $null }
+
+    return [PSCustomObject]@{
+        Path    = $engineExe
+        Dir     = Split-Path $engineExe -Parent
+        Version = $version
+    }
 }
 
 function Get-StealthEngineVersionBase {
@@ -41,6 +65,14 @@ function Test-StealthEngineVersionCompatible {
         return $false
     }
     return (Get-StealthEngineVersionBase $Installed) -eq (Get-StealthEngineVersionBase $Wanted)
+}
+
+function Get-StealthAppUpdatePin {
+    param([string]$Version)
+
+    $base = Get-StealthEngineVersionBase -Version $Version
+    if (-not $base) { return $null }
+    return ($base.TrimEnd('.') + '.')
 }
 
 function Get-RceditPath {
@@ -599,9 +631,13 @@ function Get-StealthSearchEngineDisplayName {
 }
 
 function Get-StealthDistributionPoliciesObject {
-    param([string]$SearchEngine = "Google")
+    param(
+        [string]$SearchEngine = "Google",
+        [string]$EngineVersion = "151.0.3"
+    )
 
     $search = Get-StealthSearchEngineDefinition -SearchEngine $SearchEngine
+    $updatePin = Get-StealthAppUpdatePin -Version $EngineVersion
     $searchPolicy = @{
         Default = $search.Name
     }
@@ -622,10 +658,23 @@ function Get-StealthDistributionPoliciesObject {
             DisableTelemetry          = $true
             DisableFirefoxStudies     = $true
             DisableRemoteImprovements = $true
+            DisableAppUpdate          = $true
+            AppAutoUpdate             = $false
+            BackgroundAppUpdate       = $false
+            DisableSystemAddonUpdate  = $true
+            DisableDefaultBrowserAgent = $true
+            AppUpdatePin              = $updatePin
             NetworkPrediction         = $false
             DisablePocket             = $true
             SearchEngines = $searchPolicy
             Preferences = @{
+                "app.update.enabled"                     = $false
+                "app.update.auto"                        = $false
+                "app.update.background.enabled"          = $false
+                "app.update.service.enabled"             = $false
+                "app.update.silent"                      = $false
+                "app.update.staging.enabled"             = $false
+                "app.update.langpack.enabled"            = $false
                 "browser.taskbar.lists.enabled"          = $false
                 "browser.taskbar.lists.tasks.enabled"    = $false
                 "browser.taskbar.lists.frequent.enabled" = $false
@@ -640,14 +689,15 @@ function Get-StealthDistributionPoliciesObject {
 function Write-StealthDistributionPolicies {
     param(
         [string]$EngineRoot,
-        [string]$SearchEngine = "Google"
+        [string]$SearchEngine = "Google",
+        [string]$EngineVersion = "151.0.3"
     )
 
     $distDir = Join-Path $EngineRoot "distribution"
     New-Item -ItemType Directory -Force -Path $distDir | Out-Null
 
     $search = Get-StealthSearchEngineDefinition -SearchEngine $SearchEngine
-    $policies = Get-StealthDistributionPoliciesObject -SearchEngine $search.Id | ConvertTo-Json -Depth 6
+    $policies = Get-StealthDistributionPoliciesObject -SearchEngine $search.Id -EngineVersion $EngineVersion | ConvertTo-Json -Depth 6
     $utf8NoBom = New-Object System.Text.UTF8Encoding $false
     $dest = Join-Path $distDir "policies.json"
 
@@ -682,12 +732,14 @@ function Write-StealthDistributionPolicies {
 function Install-StealthDistributionConfig {
     param(
         [string]$EngineRoot,
-        [string]$SearchEngine = "Google"
+        [string]$SearchEngine = "Google",
+        [string]$EngineVersion = "151.0.3"
     )
 
     $searchName = Get-StealthSearchEngineDisplayName -SearchEngine $SearchEngine
-    Write-StealthDistributionPolicies -EngineRoot $EngineRoot -SearchEngine $SearchEngine
+    Write-StealthDistributionPolicies -EngineRoot $EngineRoot -SearchEngine $SearchEngine -EngineVersion $EngineVersion
     Write-SetupLog "Default search: $searchName" "Ok"
+    Write-SetupLog "Firefox updates disabled for Stealth engine (pinned to $EngineVersion)" "Ok"
 }
 
 function Sync-StealthEngine {
@@ -696,19 +748,12 @@ function Sync-StealthEngine {
         [string]$SearchEngine = "Google"
     )
 
-    $source = Get-MozillaFirefoxSource
-    if (-not $source) {
-        throw "Mozilla Firefox is not installed. Run full Stealth setup first."
-    }
-
-    if ($source.Version -ne $Version) {
-        Write-SetupLog "Mozilla $($source.Version) installed, Stealth wants $Version" "Warn"
-    }
-
     $engineRoot = Get-StealthEngineRoot
     $stampPath = Join-Path $engineRoot ".engine-version"
     $engineExe = Join-Path $engineRoot "firefox.exe"
-    $needsSync = -not (Test-Path $engineExe) -or -not (Test-Path $stampPath) -or ((Get-Content $stampPath -Raw).Trim() -ne $source.Version)
+    $existing = Get-StealthEngineSource
+    $existingOk = $existing -and (Test-StealthEngineVersionCompatible -Installed $existing.Version -Wanted $Version)
+    $needsSync = -not $existingOk
 
     $iconPath = Join-Path $script:InstallScriptDir "branding\stealth-dark.ico"
     if (-not (Test-Path $iconPath)) {
@@ -719,6 +764,19 @@ function Sync-StealthEngine {
     }
 
     if ($needsSync) {
+        if ($existing) {
+            Write-SetupLog "Stealth engine $($existing.Version) -> $Version" "Warn"
+        }
+
+        $source = Get-MozillaFirefoxSource
+        if (-not $source) {
+            throw "Mozilla Firefox $Version source is not installed. Run full setup to download the pinned engine."
+        }
+
+        if (-not (Test-StealthEngineVersionCompatible -Installed $source.Version -Wanted $Version)) {
+            throw "Mozilla Firefox source is $($source.Version), but Stealth requires $Version. Run full setup to install the pinned engine."
+        }
+
         Write-Step "Building Stealth engine (branded copy)..."
         New-Item -ItemType Directory -Force -Path $engineRoot | Out-Null
 
@@ -728,12 +786,22 @@ function Sync-StealthEngine {
             throw "Failed to copy Firefox engine (robocopy $LASTEXITCODE)."
         }
 
-        Write-TextFileNoBom -Path $stampPath -Content $source.Version
+        $synced = Get-StealthEngineSource
+        if (-not $synced -or -not (Test-StealthEngineVersionCompatible -Installed $synced.Version -Wanted $Version)) {
+            $actual = if ($synced) { $synced.Version } else { "missing" }
+            throw "Stealth engine version check failed. Expected $Version, got $actual."
+        }
+
+        Write-TextFileNoBom -Path $stampPath -Content $synced.Version
         Write-SetupLog "Engine: $engineExe" "Detail"
+    }
+    else {
+        Write-TextFileNoBom -Path $stampPath -Content $existing.Version
+        Write-SetupLog "Stealth engine already pinned: $($existing.Version)" "Ok"
     }
 
     Set-StealthEngineBranding -EngineRoot $engineRoot -IconPath $iconPath
-    Install-StealthDistributionConfig -EngineRoot $engineRoot -SearchEngine $SearchEngine
+    Install-StealthDistributionConfig -EngineRoot $engineRoot -SearchEngine $SearchEngine -EngineVersion $Version
     return $engineExe
 }
 

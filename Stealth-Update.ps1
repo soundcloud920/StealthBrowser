@@ -75,6 +75,7 @@ function Get-StealthLaunchConfig {
         StealthExe            = [string]$obj.stealthExe
         SetupVersion          = [string]$obj.setupVersion
         EngineVersion         = [string]$obj.engineVersion
+        SearchEngine          = if ($obj.searchEngine) { [string]$obj.searchEngine } else { "Google" }
         DismissedVersion      = if ($obj.dismissedVersion) { [string]$obj.dismissedVersion } else { $null }
         LastUpdateCheckUtc    = if ($obj.lastUpdateCheckUtc) { [string]$obj.lastUpdateCheckUtc } else { $null }
         LastUpdateCheckLatest = if ($obj.lastUpdateCheckLatest) { [string]$obj.lastUpdateCheckLatest } else { $null }
@@ -124,6 +125,7 @@ function Write-StealthLaunchConfig {
         [string]$StealthExe,
         [string]$SetupVersion,
         [string]$EngineVersion,
+        [string]$SearchEngine,
         [string]$DismissedVersion,
         [string]$LastUpdateCheckUtc,
         [string]$LastUpdateCheckLatest
@@ -142,6 +144,12 @@ function Write-StealthLaunchConfig {
     if (-not $PSBoundParameters.ContainsKey("LastUpdateCheckLatest") -and $existing) {
         $LastUpdateCheckLatest = $existing.LastUpdateCheckLatest
     }
+    if (-not $PSBoundParameters.ContainsKey("SearchEngine") -and $existing) {
+        $SearchEngine = $existing.SearchEngine
+    }
+    if ([string]::IsNullOrWhiteSpace($SearchEngine)) {
+        $SearchEngine = "Google"
+    }
 
     $config = @{
         productName           = $ProductName
@@ -150,6 +158,7 @@ function Write-StealthLaunchConfig {
         stealthExe            = $StealthExe
         setupVersion          = $SetupVersion
         engineVersion         = $EngineVersion
+        searchEngine          = $SearchEngine
         dismissedVersion      = $DismissedVersion
         lastUpdateCheckUtc    = $LastUpdateCheckUtc
         lastUpdateCheckLatest = $LastUpdateCheckLatest
@@ -324,7 +333,8 @@ function Install-StealthReleaseUpdate {
         Push-Location $extractDir
         try {
             . (Join-Path $extractDir "Install-Stealth.ps1")
-            Invoke-StealthSetup -ProfileOnly:$profileOnly -LaunchWhenDone:$false
+            $searchEngine = if ($localCfg -and $localCfg.SearchEngine) { $localCfg.SearchEngine } else { "Google" }
+            Invoke-StealthSetup -ProfileOnly:$profileOnly -LaunchWhenDone:$false -SearchEngine $searchEngine
         }
         finally {
             Pop-Location
@@ -383,6 +393,7 @@ function Test-StealthUpdateAtLaunch {
             -StealthExe $config.StealthExe `
             -SetupVersion $markerVer `
             -EngineVersion $config.EngineVersion `
+            -SearchEngine $config.SearchEngine `
             -DismissedVersion $offer.LatestVersion
         return
     }

@@ -2,7 +2,7 @@
 
 **Stealth** — приватный браузер на движке Mozilla Firefox, собранный в один установщик под Windows 10/11. Не форк. Не «сборка с вирусами». Готовый профиль, политики движка, лаунчер и автообновление — всё из коробки.
 
-**Текущая версия: `1.0.1-beta`**
+**Текущая версия: `1.0.2-beta`**
 
 ---
 
@@ -12,8 +12,8 @@
 
 | Файл | Для кого |
 |------|----------|
-| **`StealthBrowser-Setup-v1.0.1-beta.exe`** | Обычная установка — двойной клик |
-| **`StealthBrowser-setup-v1.0.1-beta.zip`** | Портатив / разработчики |
+| **`StealthBrowser-Setup-v1.0.2-beta.exe`** | Обычная установка — двойной клик |
+| **`StealthBrowser-setup-v1.0.2-beta.zip`** | Портатив / разработчики |
 
 ---
 
@@ -22,7 +22,7 @@
 1. **Windows 10/11 x64** — без WSL, без костылей. Нативный `.exe`.
 2. **PowerShell 5.1+** — уже есть в системе.
 3. **.NET Framework 4.x** — для лаунчера `Stealth.exe`; в Windows по умолчанию.
-4. **Интернет** — один раз, чтобы скачать официальный движок Mozilla **151.0.3 (ru)**. Дальше движок лежит локально в `%LocalAppData%\StealthBrowser\Engine\`.
+4. **Интернет** — один раз, чтобы скачать официальный движок Mozilla **151.0.3 (ru)**. Установщик качает именно эту версию из `version.json`, проверяет её после установки и только потом копирует в `%LocalAppData%\StealthBrowser\Engine\`.
 5. **Мозг** — если после прочтения README вы всё ещё спрашиваете «а это безопасно?», сначала прочитайте таблицу ниже и раздел «Пруфы из кода». Stealth не шлёт телеметрию в Mozilla/Google по дефолту — это не магия, это `user.js` + `policies.json`.
 
 ---
@@ -60,7 +60,7 @@
 | **New Tab** | Лента, реклама, телеметрия ленты | **Выключен** — `blanktab.html` |
 | **Сессии / автовосстановление** | Агрессивный sessionstore | `restore_on_demand`, интервал записи **60 с**, меньше дискового IO |
 | **Prefetch / speculative** | Включены | `network.prefetch-next=false`, `speculative-parallel-limit=0`, `urlbar.speculativeConnect=false` |
-| **Фоновые обновления** | `app.update.background.enabled` | **false** в профиле |
+| **Фоновые обновления Firefox** | Включены / service / scheduled tasks | **Отключены**: `DisableAppUpdate`, `AppUpdatePin`, update prefs, удаление background update tasks |
 | **Тема UI** | Proton, светлая/системная | **Полностью чёрный** chrome + content |
 | **Шрифт** | Системный | **LLG_Relicus** — UI и страницы |
 | **Расширения** | Ставишь сам | **uBlock Origin**, **LocalCDN**, **SponsorBlock**, ru-langpack — предустановлены |
@@ -183,7 +183,22 @@ user_pref("toolkit.cosmeticAnimations.enabled", false);
 
 Если в установщике выбран SearXNG, Stealth добавляет его в профиль и применяет прежние CSS/JS-настройки страницы. В остальных случаях кастомный поисковик не навязывается.
 
-### 9. Лаунчер и автообновление — не фоновый мусор
+### 9. Движок — pinned Firefox, без сюрпризов от апдейтов
+
+`version.json` фиксирует `engineVersion`. Full setup скачивает именно эту версию, ждёт именно её и падает с ошибкой, если после установки найден другой Firefox. `ProfileOnly` больше не пересобирает Stealth из системного Firefox: если локальный `%LocalAppData%\StealthBrowser\Engine\firefox.exe` уже нужной версии, он просто обновляет политики и профиль.
+
+Пруф в policy:
+
+```json
+"DisableAppUpdate": true,
+"AppAutoUpdate": false,
+"BackgroundAppUpdate": false,
+"DisableSystemAddonUpdate": true,
+"DisableDefaultBrowserAgent": true,
+"AppUpdatePin": "151.0.3."
+```
+
+### 10. Лаунчер и автообновление — не фоновый мусор
 
 Схема запуска (`StealthLauncher.cs`):
 
@@ -195,7 +210,7 @@ user_pref("toolkit.cosmeticAnimations.enabled", false);
 
 **Тейк:** автоапдейтер **не крутится в фоне**, **не трогает** уже открытый браузер, **не вешает** scheduled task. Проверка — один раз за запуск ярлыка. Нет сети — браузер уже работает, лаунчер отваливается молча.
 
-### 10. Расширения из коробки
+### 11. Расширения из коробки
 
 | Расширение | Зачем |
 |------------|-------|
@@ -209,7 +224,7 @@ user_pref("toolkit.cosmeticAnimations.enabled", false);
 ## УСТАНОВКА
 
 1. Закрой **Stealth** и **Firefox** полностью (проверь диспетчер задач).
-2. Скачай **`StealthBrowser-Setup-v1.0.1-beta.exe`** из [Releases](https://github.com/soundcloud920/StealthBrowser/releases/latest).
+2. Скачай **`StealthBrowser-Setup-v1.0.2-beta.exe`** из [Releases](https://github.com/soundcloud920/StealthBrowser/releases/latest).
 3. Запусти → **Install** → мастер StealthBrowser → **Установить**.
 4. Браузер откроется с профилем `*.stealth`.
 5. Дальше — ярлык **Stealth** на рабочем столе / в Пуске.
@@ -217,7 +232,7 @@ user_pref("toolkit.cosmeticAnimations.enabled", false);
 Тихая установка:
 
 ```bat
-StealthBrowser-Setup-v1.0.1-beta.exe /install
+StealthBrowser-Setup-v1.0.2-beta.exe /install /search=Google
 ```
 
 ### Только обновить профиль (движок уже стоит)
@@ -261,8 +276,8 @@ StealthBrowser-Setup-v1.0.1-beta.exe /install
 
 Артефакты в `dist/`:
 
-- `StealthBrowser-Setup-v1.0.1-beta.exe`
-- `StealthBrowser-setup-v1.0.1-beta.zip`
+- `StealthBrowser-Setup-v1.0.2-beta.exe`
+- `StealthBrowser-setup-v1.0.2-beta.zip`
 
 Тег `v*` на GitHub → CI собирает и публикует в Releases.
 
@@ -270,7 +285,7 @@ StealthBrowser-Setup-v1.0.1-beta.exe /install
 
 ## BETA
 
-`1.0.1-beta` — выбор поисковика в установщике, Google по умолчанию. `1.0.0-beta` — первый публичный срез после перезапуска репозитория. Ожидай:
+`1.0.2-beta` — pinned Firefox engine + отключение Firefox update paths + фикс silent setup args. `1.0.1-beta` — выбор поисковика в установщике, Google по умолчанию. `1.0.0-beta` — первый публичный срез после перезапуска репозитория. Ожидай:
 
 - возможные баги в edge-case сайтах;
 - обновления профиля через Releases;
@@ -290,7 +305,7 @@ StealthBrowser/
 ├── Stealth-Update.ps1          # GitHub releases API
 ├── Stealth-ApplyUpdate.ps1     # Применение обновления (видимая консоль)
 ├── Stealth-Engine.ps1          # Брендинг движка
-├── version.json                # 1.0.1-beta
+├── version.json                # 1.0.2-beta
 ├── bundle/                     # Шаблоны профиля (LFS)
 │   └── templates/
 │       ├── user.js
@@ -309,4 +324,4 @@ StealthBrowser/
 
 ---
 
-**StealthBrowser** · Relicyos · `1.0.1-beta`
+**StealthBrowser** · Relicyos · `1.0.2-beta`

@@ -28,7 +28,7 @@ namespace StealthBrowser
             {
                 string installDir = ExtractPayload(null);
                 if (silent)
-                    return RunInstallScript(installDir, true);
+                    return RunInstallScript(installDir, true, BuildInstallScriptArguments(args));
 
                 return RunSetupGui(installDir);
             }
@@ -118,23 +118,37 @@ namespace StealthBrowser
 
         internal static int RunInstallScript(string installDir, bool hidden)
         {
+            return RunInstallScript(installDir, hidden, string.Empty);
+        }
+
+        internal static int RunInstallScript(string installDir, bool hidden, string scriptArguments)
+        {
             string script = Path.Combine(installDir, "Install-Stealth.ps1");
             if (!File.Exists(script))
                 throw new FileNotFoundException("Install-Stealth.ps1 not found after extraction.", script);
 
-            return RunPowerShellFile(installDir, script, hidden);
+            return RunPowerShellFile(installDir, script, hidden, scriptArguments);
         }
 
         private static int RunPowerShellFile(string installDir, string scriptPath, bool hidden)
         {
+            return RunPowerShellFile(installDir, scriptPath, hidden, string.Empty);
+        }
+
+        private static int RunPowerShellFile(string installDir, string scriptPath, bool hidden, string scriptArguments)
+        {
             string windowStyle = hidden ? "Hidden" : "Normal";
+            string arguments = string.Format(
+                "-NoProfile -ExecutionPolicy Bypass -WindowStyle {0} -File \"{1}\"",
+                windowStyle,
+                scriptPath);
+            if (!string.IsNullOrWhiteSpace(scriptArguments))
+                arguments += " " + scriptArguments;
+
             var psi = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
-                Arguments = string.Format(
-                    "-NoProfile -ExecutionPolicy Bypass -WindowStyle {0} -File \"{1}\"",
-                    windowStyle,
-                    scriptPath),
+                Arguments = arguments,
                 WorkingDirectory = installDir,
                 UseShellExecute = false,
             };
@@ -154,6 +168,74 @@ namespace StealthBrowser
 
                 return proc.ExitCode;
             }
+        }
+
+        private static string BuildInstallScriptArguments(string[] args)
+        {
+            bool profileOnly = false;
+            string searchEngine = null;
+
+            if (args != null)
+            {
+                for (int i = 0; i < args.Length; i++)
+                {
+                    string arg = args[i] ?? string.Empty;
+                    if (string.Equals(arg, "/install", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(arg, "-install", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    if (string.Equals(arg, "/profileonly", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(arg, "-profileonly", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(arg, "-ProfileOnly", StringComparison.OrdinalIgnoreCase))
+                    {
+                        profileOnly = true;
+                        continue;
+                    }
+
+                    if (TryReadValueArg(arg, "/search=", ref searchEngine) ||
+                        TryReadValueArg(arg, "/searchengine=", ref searchEngine) ||
+                        TryReadValueArg(arg, "--search=", ref searchEngine) ||
+                        TryReadValueArg(arg, "--searchengine=", ref searchEngine) ||
+                        TryReadValueArg(arg, "-SearchEngine=", ref searchEngine))
+                    {
+                        continue;
+                    }
+
+                    if ((string.Equals(arg, "/search", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(arg, "/searchengine", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(arg, "-SearchEngine", StringComparison.OrdinalIgnoreCase)) &&
+                        i + 1 < args.Length)
+                    {
+                        searchEngine = args[++i];
+                    }
+                }
+            }
+
+            string result = string.Empty;
+            if (profileOnly)
+                result += " -ProfileOnly";
+            if (!string.IsNullOrWhiteSpace(searchEngine))
+                result += " -SearchEngine " + QuotePowerShellArgument(searchEngine);
+
+            return result.Trim();
+        }
+
+        private static bool TryReadValueArg(string arg, string prefix, ref string value)
+        {
+            if (!arg.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            value = arg.Substring(prefix.Length);
+            return true;
+        }
+
+        private static string QuotePowerShellArgument(string value)
+        {
+            if (value == null)
+                return "''";
+            return "'" + value.Replace("'", "''") + "'";
         }
     }
 }
