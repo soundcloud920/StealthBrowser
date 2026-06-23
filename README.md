@@ -2,7 +2,7 @@
 
 **Stealth** — приватный браузер на движке Mozilla Firefox, собранный в один установщик под Windows 10/11. Не форк. Не «сборка с вирусами». Готовый профиль, политики движка, лаунчер и автообновление — всё из коробки.
 
-**Текущая версия: `1.0.0-beta`**
+**Текущая версия: `1.0.1-beta`**
 
 ---
 
@@ -12,8 +12,8 @@
 
 | Файл | Для кого |
 |------|----------|
-| **`StealthBrowser-Setup-v1.0.0-beta.exe`** | Обычная установка — двойной клик |
-| **`StealthBrowser-setup-v1.0.0-beta.zip`** | Портатив / разработчики |
+| **`StealthBrowser-Setup-v1.0.1-beta.exe`** | Обычная установка — двойной клик |
+| **`StealthBrowser-setup-v1.0.1-beta.zip`** | Портатив / разработчики |
 
 ---
 
@@ -56,7 +56,7 @@
 | **Safe Browsing** | Запросы к Google/Mozilla | **Отключён** — URL не уходят на проверку |
 | **ETP (Tracking Protection)** | Включён в движке | **Выключен** — фильтрация через **uBlock Origin** + **LocalCDN** (меньше дублирования работы в content process) |
 | **Pocket / спонсоры / Suggest** | Включены | Pocket, Contile, QuickSuggest, ML-chat — off |
-| **Поиск по умолчанию** | Google / региональный | **SearXNG** (`searx.tiekoetter.com`), ru-RU, чёрная тема |
+| **Поиск по умолчанию** | Google / региональный | Выбирается в установщике: **Google** по умолчанию, DuckDuckGo / Bing / SearXNG опционально |
 | **New Tab** | Лента, реклама, телеметрия ленты | **Выключен** — `blanktab.html` |
 | **Сессии / автовосстановление** | Агрессивный sessionstore | `restore_on_demand`, интервал записи **60 с**, меньше дискового IO |
 | **Prefetch / speculative** | Включены | `network.prefetch-next=false`, `speculative-parallel-limit=0`, `urlbar.speculativeConnect=false` |
@@ -171,18 +171,17 @@ user_pref("toolkit.cosmeticAnimations.enabled", false);
 
 Ошибки сети (`about:neterror`), все `about:` страницы, SearXNG — единый стиль, шрифт LLG_Relicus, без лисы на экране ошибки.
 
-### 8. Поиск — SearXNG, не Google в политике движка
+### 8. Поиск — выбор при установке, Google по умолчанию
 
 Политика **на уровне движка** (не «пользователь забыл сменить»):
 
 ```json
 "SearchEngines": {
-  "Default": "SearXNG",
-  "Add": [{ "Name": "SearXNG", "URLTemplate": "https://searx.tiekoetter.com/search?q={searchTerms}&language=ru-RU" }]
+  "Default": "Google"
 }
 ```
 
-На главной SearXNG автодополнение **отключено** (CSS + JS) — меньше лишних XHR при наборе. На `/search` — остаётся.
+Если в установщике выбран SearXNG, Stealth добавляет его в профиль и применяет прежние CSS/JS-настройки страницы. В остальных случаях кастомный поисковик не навязывается.
 
 ### 9. Лаунчер и автообновление — не фоновый мусор
 
@@ -210,7 +209,7 @@ user_pref("toolkit.cosmeticAnimations.enabled", false);
 ## УСТАНОВКА
 
 1. Закрой **Stealth** и **Firefox** полностью (проверь диспетчер задач).
-2. Скачай **`StealthBrowser-Setup-v1.0.0-beta.exe`** из [Releases](https://github.com/soundcloud920/StealthBrowser/releases/latest).
+2. Скачай **`StealthBrowser-Setup-v1.0.1-beta.exe`** из [Releases](https://github.com/soundcloud920/StealthBrowser/releases/latest).
 3. Запусти → **Install** → мастер StealthBrowser → **Установить**.
 4. Браузер откроется с профилем `*.stealth`.
 5. Дальше — ярлык **Stealth** на рабочем столе / в Пуске.
@@ -218,7 +217,7 @@ user_pref("toolkit.cosmeticAnimations.enabled", false);
 Тихая установка:
 
 ```bat
-StealthBrowser-Setup-v1.0.0-beta.exe /install
+StealthBrowser-Setup-v1.0.1-beta.exe /install
 ```
 
 ### Только обновить профиль (движок уже стоит)
@@ -262,8 +261,8 @@ StealthBrowser-Setup-v1.0.0-beta.exe /install
 
 Артефакты в `dist/`:
 
-- `StealthBrowser-Setup-v1.0.0-beta.exe`
-- `StealthBrowser-setup-v1.0.0-beta.zip`
+- `StealthBrowser-Setup-v1.0.1-beta.exe`
+- `StealthBrowser-setup-v1.0.1-beta.zip`
 
 Тег `v*` на GitHub → CI собирает и публикует в Releases.
 
@@ -271,7 +270,7 @@ StealthBrowser-Setup-v1.0.0-beta.exe /install
 
 ## BETA
 
-`1.0.0-beta` — первый публичный срез после перезапуска репозитория. Ожидай:
+`1.0.1-beta` — выбор поисковика в установщике, Google по умолчанию. `1.0.0-beta` — первый публичный срез после перезапуска репозитория. Ожидай:
 
 - возможные баги в edge-case сайтах;
 - обновления профиля через Releases;
@@ -291,7 +290,7 @@ StealthBrowser/
 ├── Stealth-Update.ps1          # GitHub releases API
 ├── Stealth-ApplyUpdate.ps1     # Применение обновления (видимая консоль)
 ├── Stealth-Engine.ps1          # Брендинг движка
-├── version.json                # 1.0.0-beta
+├── version.json                # 1.0.1-beta
 ├── bundle/                     # Шаблоны профиля (LFS)
 │   └── templates/
 │       ├── user.js
@@ -310,4 +309,4 @@ StealthBrowser/
 
 ---
 
-**StealthBrowser** · Relicyos · `1.0.0-beta`
+**StealthBrowser** · Relicyos · `1.0.1-beta`

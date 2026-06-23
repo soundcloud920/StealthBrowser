@@ -4,40 +4,100 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using K4os.Compression.LZ4;
 
-const string EngineName = "SearXNG";
-const string SearchTemplate = "https://searx.tiekoetter.com/search";
-const string SearchForm = "https://searx.tiekoetter.com/";
-
 if (args.Length < 1)
 {
-    Console.Error.WriteLine("Usage: SetProfileSearch <profilePath|search.json.mozlz4>");
+    Console.Error.WriteLine("Usage: SetProfileSearch <profilePath|search.json.mozlz4> [Google|DuckDuckGo|Bing|SearXNG]");
     return 1;
 }
 
+var provider = ResolveProvider(args.Length >= 2 ? args[1] : "Google");
 var target = args[0];
 var searchPath = target.EndsWith("search.json.mozlz4", StringComparison.OrdinalIgnoreCase)
     ? target
     : Path.Combine(target, "search.json.mozlz4");
 
-var root = LoadSearchRoot(searchPath);
-ApplySearxngDefault(root);
+var root = LoadSearchRoot(searchPath, provider);
+ApplyDefaultSearch(root, provider);
 WriteMozLz4(searchPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = false }));
-var defaultEngine = root["metaData"]?["default"]?.GetValue<string>() ?? EngineName;
+var defaultEngine = root["metaData"]?["default"]?.GetValue<string>() ?? provider.Name;
 Console.WriteLine($"OK default={defaultEngine}");
 return 0;
 
-static JsonObject LoadSearchRoot(string searchPath)
+static SearchProvider ResolveProvider(string? value)
+{
+    var requested = string.IsNullOrWhiteSpace(value) ? "Google" : value.Trim();
+    if (requested.Equals("Chrome", StringComparison.OrdinalIgnoreCase) ||
+        requested.Equals("Google Chrome", StringComparison.OrdinalIgnoreCase))
+    {
+        requested = "Google";
+    }
+    else if (requested.Equals("DDG", StringComparison.OrdinalIgnoreCase))
+    {
+        requested = "DuckDuckGo";
+    }
+    else if (requested.Equals("SearX", StringComparison.OrdinalIgnoreCase))
+    {
+        requested = "SearXNG";
+    }
+
+    foreach (var provider in GetProviders())
+    {
+        if (provider.Id.Equals(requested, StringComparison.OrdinalIgnoreCase) ||
+            provider.Name.Equals(requested, StringComparison.OrdinalIgnoreCase))
+        {
+            return provider;
+        }
+    }
+
+    return GetProviders()[0];
+}
+
+static SearchProvider[] GetProviders()
+{
+    return
+    [
+        new SearchProvider(
+            "Google",
+            "Google",
+            "https://www.google.com/",
+            "https://www.google.com/search",
+            [new SearchParam("q", "{searchTerms}")]),
+        new SearchProvider(
+            "DuckDuckGo",
+            "DuckDuckGo",
+            "https://duckduckgo.com/",
+            "https://duckduckgo.com/",
+            [new SearchParam("q", "{searchTerms}")]),
+        new SearchProvider(
+            "Bing",
+            "Bing",
+            "https://www.bing.com/",
+            "https://www.bing.com/search",
+            [new SearchParam("q", "{searchTerms}")]),
+        new SearchProvider(
+            "SearXNG",
+            "SearXNG",
+            "https://searx.tiekoetter.com/",
+            "https://searx.tiekoetter.com/search",
+            [
+                new SearchParam("q", "{searchTerms}"),
+                new SearchParam("language", "ru-RU")
+            ]),
+    ];
+}
+
+static JsonObject LoadSearchRoot(string searchPath, SearchProvider provider)
 {
     if (!File.Exists(searchPath))
     {
-        return CreateDefaultRoot();
+        return CreateDefaultRoot(provider);
     }
 
     var json = DecodeMozLz4(File.ReadAllBytes(searchPath));
-    return JsonNode.Parse(json)?.AsObject() ?? CreateDefaultRoot();
+    return JsonNode.Parse(json)?.AsObject() ?? CreateDefaultRoot(provider);
 }
 
-static JsonObject CreateDefaultRoot()
+static JsonObject CreateDefaultRoot(SearchProvider provider)
 {
     return new JsonObject
     {
@@ -46,18 +106,19 @@ static JsonObject CreateDefaultRoot()
         ["metaData"] = new JsonObject
         {
             ["useSavedOrder"] = true,
-            ["default"] = EngineName,
-            ["defaultPrivate"] = EngineName,
-            ["order"] = new JsonArray(EngineName)
+            ["default"] = provider.Name,
+            ["defaultPrivate"] = provider.Name,
+            ["order"] = new JsonArray(provider.Name)
         }
     };
 }
 
-static void ApplySearxngDefault(JsonObject root)
+static void ApplyDefaultSearch(JsonObject root, SearchProvider provider)
 {
     var engines = root["engines"] as JsonArray ?? new JsonArray();
     root["engines"] = engines;
 
+    JsonObject? selected = null;
     var kept = new JsonArray();
     foreach (var node in engines)
     {
@@ -66,24 +127,27 @@ static void ApplySearxngDefault(JsonObject root)
             continue;
         }
 
-        var name = engine["name"]?.GetValue<string>();
-        if (string.Equals(name, EngineName, StringComparison.Ordinal))
+        var name = GetEngineName(engine);
+        if (string.Equals(name, provider.Name, StringComparison.OrdinalIgnoreCase))
         {
+            selected ??= engine.DeepClone().AsObject();
             continue;
         }
 
         kept.Add(engine.DeepClone());
     }
 
-    kept.Insert(0, CreateSearxngEngine());
+    selected ??= CreateEngine(provider);
+    kept.Insert(0, selected);
     root["engines"] = kept;
 
     var meta = root["metaData"] as JsonObject ?? new JsonObject();
     meta["useSavedOrder"] = true;
-    meta["default"] = EngineName;
-    meta["defaultPrivate"] = EngineName;
+    meta["default"] = provider.Name;
+    meta["defaultPrivate"] = provider.Name;
 
-    var order = new JsonArray { EngineName };
+    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { provider.Name };
+    var order = new JsonArray(provider.Name);
     foreach (var node in kept)
     {
         if (node is not JsonObject engine)
@@ -91,8 +155,8 @@ static void ApplySearxngDefault(JsonObject root)
             continue;
         }
 
-        var name = engine["name"]?.GetValue<string>();
-        if (string.IsNullOrWhiteSpace(name) || string.Equals(name, EngineName, StringComparison.Ordinal))
+        var name = GetEngineName(engine);
+        if (string.IsNullOrWhiteSpace(name) || !seen.Add(name))
         {
             continue;
         }
@@ -104,43 +168,47 @@ static void ApplySearxngDefault(JsonObject root)
     root["metaData"] = meta;
 }
 
-static JsonObject CreateSearxngEngine()
+static string? GetEngineName(JsonObject engine)
 {
+    return engine["name"]?.GetValue<string>() ??
+           engine["_name"]?.GetValue<string>();
+}
+
+static JsonObject CreateEngine(SearchProvider provider)
+{
+    var urlParams = new JsonArray();
+    foreach (var param in provider.Params)
+    {
+        urlParams.Add(new JsonObject
+        {
+            ["name"] = param.Name,
+            ["value"] = param.Value
+        });
+    }
+
     return new JsonObject
     {
-        ["_name"] = EngineName,
+        ["_name"] = provider.Name,
         ["_isAppProvided"] = false,
         ["_meta"] = new JsonObject
         {
             ["origin"] = "stealth-setup",
             ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
         },
-        ["name"] = EngineName,
+        ["name"] = provider.Name,
         ["isGeneralSearchEngine"] = true,
         ["isDisplayedInSearchBar"] = true,
         ["aliases"] = new JsonArray(),
-        ["searchForm"] = SearchForm,
+        ["searchForm"] = provider.SearchForm,
         ["urls"] = new JsonArray
         {
             new JsonObject
             {
                 ["params"] = new JsonArray(),
-                ["template"] = SearchTemplate
+                ["template"] = provider.SearchTemplate
             }
         },
-        ["params"] = new JsonArray
-        {
-            new JsonObject
-            {
-                ["name"] = "q",
-                ["value"] = "{searchTerms}"
-            },
-            new JsonObject
-            {
-                ["name"] = "language",
-                ["value"] = "ru-RU"
-            }
-        }
+        ["params"] = urlParams
     };
 }
 
@@ -184,3 +252,12 @@ static void WriteMozLz4(string path, string json)
 
     File.WriteAllBytes(path, stream.ToArray());
 }
+
+sealed record SearchProvider(
+    string Id,
+    string Name,
+    string SearchForm,
+    string SearchTemplate,
+    SearchParam[] Params);
+
+sealed record SearchParam(string Name, string Value);

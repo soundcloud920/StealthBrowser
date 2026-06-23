@@ -511,7 +511,112 @@ function Get-StealthBundleDistributionDir {
     return $null
 }
 
+function Get-StealthSearchEngineOptions {
+    return @(
+        [PSCustomObject]@{
+            Id            = "Google"
+            Name          = "Google"
+            SearchForm    = "https://www.google.com/"
+            SearchTemplate = "https://www.google.com/search"
+            URLTemplate   = "https://www.google.com/search?q={searchTerms}"
+            Encoding      = "UTF-8"
+            Method        = "GET"
+            IconURL       = "https://www.google.com/favicon.ico"
+            AddToPolicy   = $false
+        },
+        [PSCustomObject]@{
+            Id            = "DuckDuckGo"
+            Name          = "DuckDuckGo"
+            SearchForm    = "https://duckduckgo.com/"
+            SearchTemplate = "https://duckduckgo.com/"
+            URLTemplate   = "https://duckduckgo.com/?q={searchTerms}"
+            Encoding      = "UTF-8"
+            Method        = "GET"
+            IconURL       = "https://duckduckgo.com/favicon.ico"
+            AddToPolicy   = $false
+        },
+        [PSCustomObject]@{
+            Id            = "Bing"
+            Name          = "Bing"
+            SearchForm    = "https://www.bing.com/"
+            SearchTemplate = "https://www.bing.com/search"
+            URLTemplate   = "https://www.bing.com/search?q={searchTerms}"
+            Encoding      = "UTF-8"
+            Method        = "GET"
+            IconURL       = "https://www.bing.com/favicon.ico"
+            AddToPolicy   = $false
+        },
+        [PSCustomObject]@{
+            Id            = "SearXNG"
+            Name          = "SearXNG"
+            SearchForm    = "https://searx.tiekoetter.com/"
+            SearchTemplate = "https://searx.tiekoetter.com/search"
+            URLTemplate   = "https://searx.tiekoetter.com/search?q={searchTerms}&language=ru-RU"
+            Encoding      = "UTF-8"
+            Method        = "GET"
+            IconURL       = "https://searx.tiekoetter.com/static/themes/simple/img/favicon.png"
+            AddToPolicy   = $true
+        }
+    )
+}
+
+function Resolve-StealthSearchEngine {
+    param([string]$SearchEngine = "Google")
+
+    if ([string]::IsNullOrWhiteSpace($SearchEngine)) {
+        return "Google"
+    }
+
+    $value = $SearchEngine.Trim()
+    if ($value -match '^(chrome|google chrome)$') {
+        return "Google"
+    }
+
+    foreach ($option in (Get-StealthSearchEngineOptions)) {
+        if ($option.Id -ieq $value -or $option.Name -ieq $value) {
+            return $option.Id
+        }
+    }
+
+    return "Google"
+}
+
+function Get-StealthSearchEngineDefinition {
+    param([string]$SearchEngine = "Google")
+
+    $id = Resolve-StealthSearchEngine -SearchEngine $SearchEngine
+    foreach ($option in (Get-StealthSearchEngineOptions)) {
+        if ($option.Id -eq $id) {
+            return $option
+        }
+    }
+    return (Get-StealthSearchEngineOptions | Select-Object -First 1)
+}
+
+function Get-StealthSearchEngineDisplayName {
+    param([string]$SearchEngine = "Google")
+    return (Get-StealthSearchEngineDefinition -SearchEngine $SearchEngine).Name
+}
+
 function Get-StealthDistributionPoliciesObject {
+    param([string]$SearchEngine = "Google")
+
+    $search = Get-StealthSearchEngineDefinition -SearchEngine $SearchEngine
+    $searchPolicy = @{
+        Default = $search.Name
+    }
+    if ($search.AddToPolicy) {
+        $searchPolicy.Add = @(
+            @{
+                Name        = $search.Name
+                URLTemplate = $search.URLTemplate
+                Encoding    = $search.Encoding
+                Method      = $search.Method
+                IconURL     = $search.IconURL
+            }
+        )
+    }
+
     @{
         policies = @{
             DisableTelemetry          = $true
@@ -519,18 +624,7 @@ function Get-StealthDistributionPoliciesObject {
             DisableRemoteImprovements = $true
             NetworkPrediction         = $false
             DisablePocket             = $true
-            SearchEngines = @{
-                Add = @(
-                    @{
-                        Name        = "SearXNG"
-                        URLTemplate = "https://searx.tiekoetter.com/search?q={searchTerms}&language=ru-RU"
-                        Encoding    = "UTF-8"
-                        Method      = "GET"
-                        IconURL     = "https://searx.tiekoetter.com/static/themes/simple/img/favicon.png"
-                    }
-                )
-                Default = "SearXNG"
-            }
+            SearchEngines = $searchPolicy
             Preferences = @{
                 "browser.taskbar.lists.enabled"          = $false
                 "browser.taskbar.lists.tasks.enabled"    = $false
@@ -544,12 +638,16 @@ function Get-StealthDistributionPoliciesObject {
 }
 
 function Write-StealthDistributionPolicies {
-    param([string]$EngineRoot)
+    param(
+        [string]$EngineRoot,
+        [string]$SearchEngine = "Google"
+    )
 
     $distDir = Join-Path $EngineRoot "distribution"
     New-Item -ItemType Directory -Force -Path $distDir | Out-Null
 
-    $policies = Get-StealthDistributionPoliciesObject | ConvertTo-Json -Depth 6
+    $search = Get-StealthSearchEngineDefinition -SearchEngine $SearchEngine
+    $policies = Get-StealthDistributionPoliciesObject -SearchEngine $search.Id | ConvertTo-Json -Depth 6
     $utf8NoBom = New-Object System.Text.UTF8Encoding $false
     $dest = Join-Path $distDir "policies.json"
 
@@ -564,11 +662,15 @@ function Write-StealthDistributionPolicies {
         Remove-Item $tempPolicies -Force -ErrorAction SilentlyContinue
     }
 
+    $destPlugins = Join-Path $distDir "searchplugins"
+    if (-not $search.AddToPolicy -and (Test-Path $destPlugins)) {
+        Remove-Item $destPlugins -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
     $srcDistribution = Get-StealthBundleDistributionDir
-    if ($srcDistribution) {
+    if ($search.AddToPolicy -and $srcDistribution) {
         $srcPlugins = Join-Path $srcDistribution "searchplugins"
         if (Test-Path $srcPlugins) {
-            $destPlugins = Join-Path $distDir "searchplugins"
             if (Test-Path $destPlugins) {
                 Remove-Item $destPlugins -Recurse -Force -ErrorAction SilentlyContinue
             }
@@ -578,15 +680,20 @@ function Write-StealthDistributionPolicies {
 }
 
 function Install-StealthDistributionConfig {
-    param([string]$EngineRoot)
+    param(
+        [string]$EngineRoot,
+        [string]$SearchEngine = "Google"
+    )
 
-    Write-StealthDistributionPolicies -EngineRoot $EngineRoot
-    Write-SetupLog "Default search: SearXNG (searx.tiekoetter.com)" "Ok"
+    $searchName = Get-StealthSearchEngineDisplayName -SearchEngine $SearchEngine
+    Write-StealthDistributionPolicies -EngineRoot $EngineRoot -SearchEngine $SearchEngine
+    Write-SetupLog "Default search: $searchName" "Ok"
 }
 
 function Sync-StealthEngine {
     param(
-        [string]$Version = "151.0.3"
+        [string]$Version = "151.0.3",
+        [string]$SearchEngine = "Google"
     )
 
     $source = Get-MozillaFirefoxSource
@@ -626,7 +733,7 @@ function Sync-StealthEngine {
     }
 
     Set-StealthEngineBranding -EngineRoot $engineRoot -IconPath $iconPath
-    Install-StealthDistributionConfig -EngineRoot $engineRoot
+    Install-StealthDistributionConfig -EngineRoot $engineRoot -SearchEngine $SearchEngine
     return $engineExe
 }
 

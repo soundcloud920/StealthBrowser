@@ -267,6 +267,9 @@ function Update-InstallStatusText {
 
 function Sync-InstallFormLayout {
     $y = $pnlVersion.Location.Y + $pnlVersion.Size.Height + 6
+    $lblSearch.Location = New-Object System.Drawing.Point(26, $y)
+    $comboSearch.Location = New-Object System.Drawing.Point(174, $y)
+    $y += $comboSearch.Size.Height + 12
     $btnInstall.Location = New-Object System.Drawing.Point(24, $y)
     $y += $btnInstall.Size.Height + 10
     $lblStatus.Location = New-Object System.Drawing.Point(26, $y)
@@ -389,6 +392,45 @@ $pnlVersion.Size = New-Object System.Drawing.Size(452, 22)
 $pnlVersion.Location = New-Object System.Drawing.Point(26, 94)
 $form.Controls.Add($pnlVersion) | Out-Null
 
+$lblSearch = New-Object System.Windows.Forms.Label
+$lblSearch.Text = "Поисковик"
+$lblSearch.Font = $uiFont
+$lblSearch.ForeColor = $ColorMuted
+$lblSearch.BackColor = $ColorBg
+$lblSearch.AutoSize = $false
+$lblSearch.Size = New-Object System.Drawing.Size(140, 24)
+$lblSearch.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+$form.Controls.Add($lblSearch) | Out-Null
+
+$script:searchOptions = @(Get-StealthSearchEngineOptions)
+$comboSearch = New-Object System.Windows.Forms.ComboBox
+$comboSearch.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+$comboSearch.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$comboSearch.BackColor = $ColorSurface
+$comboSearch.ForeColor = $ColorText
+$comboSearch.Font = $uiFont
+$comboSearch.Size = New-Object System.Drawing.Size(302, 24)
+foreach ($option in $script:searchOptions) {
+    [void]$comboSearch.Items.Add($option.Name)
+}
+$defaultSearchIndex = 0
+for ($i = 0; $i -lt $script:searchOptions.Count; $i++) {
+    if ($script:searchOptions[$i].Id -eq "Google") {
+        $defaultSearchIndex = $i
+        break
+    }
+}
+$comboSearch.SelectedIndex = $defaultSearchIndex
+$form.Controls.Add($comboSearch) | Out-Null
+
+function Get-SelectedSearchEngine {
+    $index = $comboSearch.SelectedIndex
+    if ($index -lt 0 -or $index -ge $script:searchOptions.Count) {
+        return "Google"
+    }
+    return $script:searchOptions[$index].Id
+}
+
 $btnInstall = New-FlatButton -Text "Установить Stealth" -X 24 -Y 124 -W 452 -H 40 -Parent $form -Font $btnFont
 
 $lblStatus = New-Object System.Windows.Forms.Label
@@ -399,7 +441,7 @@ $lblStatus.AutoSize = $false
 $lblStatus.Size = New-Object System.Drawing.Size(452, 22)
 $lblStatus.Location = New-Object System.Drawing.Point(26, 174)
 $form.Controls.Add($lblStatus) | Out-Null
-Set-StealthWrappedLabel -Label $lblStatus -Text "Одна кнопка: если Firefox есть — настроим Stealth поверх. Если нет — установим Firefox и сразу Stealth." -MinHeight 22
+Set-StealthWrappedLabel -Label $lblStatus -Text "Выбери поисковик и нажми установку: Firefox будет установлен при необходимости и сразу настроен под Stealth." -MinHeight 22
 
 $progressBar = New-Object System.Windows.Forms.ProgressBar
 $progressBar.Location = New-Object System.Drawing.Point(24, 226)
@@ -558,6 +600,8 @@ function Complete-InstallUi {
 function Update-InstallUiState {
     $status = Get-StealthSetupStatus
     $cfg = Get-SetupVersion
+    $lblSearch.Enabled = $true
+    $comboSearch.Enabled = $true
 
     if (-not $status.ProfileExists) {
         Set-StealthVersionLabel -Text (@(
@@ -598,7 +642,10 @@ Update-InstallUiState
 $btnInstall.Add_Click({
     if ($script:installHandle -and -not $script:installHandle.IsCompleted) { return }
 
+    $selectedSearchEngine = Get-SelectedSearchEngine
     $btnInstall.Enabled = $false
+    $lblSearch.Enabled = $false
+    $comboSearch.Enabled = $false
     $logBox.Clear()
     Update-InstallStatusText -Text "Запуск установки..."
     $lblStatus.ForeColor = $ColorText
@@ -614,6 +661,7 @@ $btnInstall.Add_Click({
     while ($progressQueue.TryDequeue([ref]$drain)) {}
 
     [void]$logQueue.Enqueue("StealthBrowser setup")
+    [void]$logQueue.Enqueue("Search: $(Get-StealthSearchEngineDisplayName -SearchEngine $selectedSearchEngine)")
     [void]$logQueue.Enqueue("")
 
     $script:installUiFinalized = $false
@@ -640,7 +688,8 @@ param(
     [string]$Root,
     [object]$LogQueue,
     [object]$StatusQueue,
-    [object]$ProgressQueue
+    [object]$ProgressQueue,
+    [string]$SearchEngine
 )
 Set-Location $Root
 . (Join-Path $Root "Install-Stealth.ps1")
@@ -648,7 +697,7 @@ $script:SetupLogQueue = $LogQueue
 $script:SetupStatusQueue = $StatusQueue
 $script:SetupProgressQueue = $ProgressQueue
 try {
-    Invoke-StealthSetup
+    Invoke-StealthSetup -SearchEngine $SearchEngine
     $status = Get-StealthSetupStatus
     if (-not $status.ProfileExists) {
         throw "Профиль Stealth не создан. Повторите установку."
@@ -668,6 +717,7 @@ catch {
     $null = $script:installPs.AddArgument($logQueue)
     $null = $script:installPs.AddArgument($statusQueue)
     $null = $script:installPs.AddArgument($progressQueue)
+    $null = $script:installPs.AddArgument($selectedSearchEngine)
 
     $script:installHandle = $script:installPs.BeginInvoke()
 })

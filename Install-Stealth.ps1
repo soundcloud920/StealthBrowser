@@ -1,6 +1,7 @@
 ﻿#Requires -Version 5.1
 param(
-    [switch]$ProfileOnly
+    [switch]$ProfileOnly,
+    [string]$SearchEngine = "Google"
 )
 
 $ErrorActionPreference = "Stop"
@@ -353,7 +354,10 @@ function Import-StealthToolbarPrefOnce {
 }
 
 function Set-ProfileDefaultSearch {
-    param([string]$ProfilePath)
+    param(
+        [string]$ProfilePath,
+        [string]$SearchEngine = "Google"
+    )
 
     $searchTool = Join-Path $script:InstallScriptDir "tools\SetProfileSearch.exe"
     if (-not (Test-Path $searchTool)) {
@@ -361,12 +365,15 @@ function Set-ProfileDefaultSearch {
         return
     }
 
+    $resolved = Resolve-StealthSearchEngine -SearchEngine $SearchEngine
+    $displayName = Get-StealthSearchEngineDisplayName -SearchEngine $resolved
+
     try {
-        & $searchTool $ProfilePath
+        & $searchTool $ProfilePath $resolved
         if ($LASTEXITCODE -ne 0) {
             throw "SetProfileSearch.exe exited with code $LASTEXITCODE"
         }
-        Write-SetupLog "Profile search default: SearXNG (searx.tiekoetter.com)" "Ok"
+        Write-SetupLog "Profile search default: $displayName" "Ok"
     }
     catch {
         Write-SetupLog "Could not patch profile search engines: $($_.Exception.Message)" "Warn"
@@ -667,13 +674,14 @@ function Stop-StealthProcess {
 function Install-StealthIfNeeded {
     param(
         [string]$Version = "151.0.3",
-        [string]$Lang = "ru"
+        [string]$Lang = "ru",
+        [string]$SearchEngine = "Google"
     )
 
     $source = Get-MozillaFirefoxSource
     if ($source -and (Test-StealthEngineVersionCompatible -Installed $source.Version -Wanted $Version)) {
         Write-SetupProgress -Percent 58 -Message "Движок найден, патч брендинга Stealth..."
-        return Sync-StealthEngine -Version $Version
+        return Sync-StealthEngine -Version $Version -SearchEngine $SearchEngine
     }
 
     if ($source) {
@@ -719,7 +727,7 @@ $(Get-StealthMaintenanceRemovalScript)
 
     Remove-MozillaFirefoxShortcuts
     Write-SetupProgress -Percent 58 -Message "Патч брендинга Stealth..."
-    return Sync-StealthEngine -Version $Version
+    return Sync-StealthEngine -Version $Version -SearchEngine $SearchEngine
 }
 
 function Get-StealthProfilePath {
@@ -794,19 +802,22 @@ function Get-StealthProfileMarker {
     return [PSCustomObject]@{
         SetupVersion = [string]$obj.setupVersion
         AppliedAt    = [string]$obj.appliedAt
+        SearchEngine = [string]$obj.searchEngine
     }
 }
 
 function Write-StealthProfileMarker {
     param(
         [string]$ProfilePath,
-        [string]$SetupVersion
+        [string]$SetupVersion,
+        [string]$SearchEngine = "Google"
     )
 
     $chromeDir = Join-Path $ProfilePath "chrome"
     New-Item -ItemType Directory -Force -Path $chromeDir | Out-Null
     $marker = @{
         setupVersion = $SetupVersion
+        searchEngine = (Resolve-StealthSearchEngine -SearchEngine $SearchEngine)
         appliedAt    = (Get-Date).ToUniversalTime().ToString("o")
     } | ConvertTo-Json
     Write-TextFileNoBom -Path (Join-Path $chromeDir $script:StealthMarkerFile) -Content $marker
@@ -947,7 +958,8 @@ function Apply-StealthProfileBundle {
     param(
         [string]$Root,
         [string]$ProfilePath,
-        [string]$SetupVersion
+        [string]$SetupVersion,
+        [string]$SearchEngine = "Google"
     )
 
     $marker = Get-StealthProfileMarker -ProfilePath $ProfilePath
@@ -1013,17 +1025,23 @@ function Apply-StealthProfileBundle {
     Set-ProfilePref -ProfilePath $ProfilePath -Name "browser.newtab.url" -Value $homeUrl
     Set-ProfilePref -ProfilePath $ProfilePath -Name "browser.startup.page" -Value "1" -AsInt
     Set-ProfileDefaultZoom -ProfilePath $ProfilePath
-    Set-ProfileDefaultSearch -ProfilePath $ProfilePath
+    Set-ProfileDefaultSearch -ProfilePath $ProfilePath -SearchEngine $SearchEngine
 
-    Write-StealthProfileMarker -ProfilePath $ProfilePath -SetupVersion $SetupVersion
+    Write-StealthProfileMarker -ProfilePath $ProfilePath -SetupVersion $SetupVersion -SearchEngine $SearchEngine
     Write-SetupLog "Profile marker: v$SetupVersion" "Ok"
 }
 
 function Invoke-StealthSetup {
-    param([switch]$LaunchWhenDone, [switch]$ProfileOnly)
+    param(
+        [switch]$LaunchWhenDone,
+        [switch]$ProfileOnly,
+        [string]$SearchEngine = "Google"
+    )
 
     $cfg = Get-SetupVersion
     $Root = Initialize-BundleRoot
+    $SearchEngine = Resolve-StealthSearchEngine -SearchEngine $SearchEngine
+    Write-SetupLog "Search engine: $(Get-StealthSearchEngineDisplayName -SearchEngine $SearchEngine)" "Detail"
 
     Write-SetupProgress -Percent 2 -Message "Подготовка..."
     if (Test-StealthRunning) {
@@ -1041,11 +1059,11 @@ function Invoke-StealthSetup {
             throw "Stealth is not installed. Run full install first (without -ProfileOnly)."
         }
         Write-SetupProgress -Percent 60 -Message "Синхронизация движка Stealth..."
-        $stealthExe = Sync-StealthEngine -Version $cfg.EngineVersion
+        $stealthExe = Sync-StealthEngine -Version $cfg.EngineVersion -SearchEngine $SearchEngine
         Write-SetupLog "Profile-only mode (skipping Mozilla install)" "Detail"
     }
     else {
-        $stealthExe = Install-StealthIfNeeded -Version $cfg.EngineVersion -Lang $cfg.EngineLang
+        $stealthExe = Install-StealthIfNeeded -Version $cfg.EngineVersion -Lang $cfg.EngineLang -SearchEngine $SearchEngine
     }
 
     Write-SetupProgress -Percent 62 -Message "Удаление Mozilla Maintenance Service..."
@@ -1058,7 +1076,7 @@ function Invoke-StealthSetup {
     Clear-StealthProfileStartupCache -ProfilePath $profilePath
 
     Write-SetupProgress -Percent 78 -Message "Применение профиля и темы..."
-    Apply-StealthProfileBundle -Root $Root -ProfilePath $profilePath -SetupVersion $cfg.SetupVersion
+    Apply-StealthProfileBundle -Root $Root -ProfilePath $profilePath -SetupVersion $cfg.SetupVersion -SearchEngine $SearchEngine
     Patch-StealthProfileLangpack -ProfilePath $profilePath
     Clear-StealthProfileStartupCache -ProfilePath $profilePath
 
@@ -1100,7 +1118,7 @@ try {
     Write-SetupLog "$($cfg.ProductName) v$($cfg.SetupVersion)" "Ok"
     Write-Host ""
 
-    Invoke-StealthSetup -LaunchWhenDone -ProfileOnly:$ProfileOnly
+    Invoke-StealthSetup -LaunchWhenDone -ProfileOnly:$ProfileOnly -SearchEngine $SearchEngine
 
     Write-Host ""
     Write-SetupLog "Done!" "Ok"
