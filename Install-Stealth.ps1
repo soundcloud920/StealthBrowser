@@ -141,7 +141,7 @@ function Get-SetupVersion {
         return [PSCustomObject]@{
             ProductName  = "StealthBrowser"
             GitHubRepo   = "soundcloud920/StealthBrowser"
-            SetupVersion = "1.0.6-beta"
+            SetupVersion = "1.0.7-beta"
             EngineVersion = "151.0.3"
             EngineLang   = "ru"
         }
