@@ -23,5 +23,5 @@ if (-not $config -or -not (Test-Path $config.StealthExe) -or -not (Test-Path $co
 }
 
 Start-Process -FilePath $config.StealthExe -ArgumentList @(
-    "-no-remote", "-profile", $config.ProfilePath
+    "-no-remote", "--allow-downgrade", "-profile", $config.ProfilePath
 ) | Out-Null

@@ -361,7 +361,7 @@ function Test-StealthUpdateAtLaunch {
             Start-StealthAfterSetup -StealthExe $config.StealthExe -ProfilePath $config.ProfilePath
         }
         else {
-            Start-Process -FilePath $config.StealthExe -ArgumentList @('-no-remote', '-profile', $config.ProfilePath) | Out-Null
+            Start-Process -FilePath $config.StealthExe -ArgumentList @('-no-remote', '--allow-downgrade', '-profile', $config.ProfilePath) | Out-Null
         }
     }
 

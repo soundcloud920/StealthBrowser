@@ -99,7 +99,7 @@ namespace StealthBrowser
 
         private static void StartBrowser(string engine, string profile, string url)
         {
-            string arguments = "-profile \"" + profile + "\"";
+            string arguments = "-no-remote --allow-downgrade -profile \"" + profile + "\"";
             if (!string.IsNullOrEmpty(url))
             {
                 arguments += " -osint -url \"" + url.Replace("\"", "\\\"") + "\"";

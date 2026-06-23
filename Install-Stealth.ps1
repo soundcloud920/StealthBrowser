@@ -141,7 +141,7 @@ function Get-SetupVersion {
         return [PSCustomObject]@{
             ProductName  = "StealthBrowser"
             GitHubRepo   = "soundcloud920/StealthBrowser"
-            SetupVersion = "1.0.2-beta"
+            SetupVersion = "1.0.3-beta"
             EngineVersion = "151.0.3"
             EngineLang   = "ru"
         }
@@ -994,8 +994,21 @@ function Start-StealthAfterSetup {
         return
     }
     Start-Process -FilePath $StealthExe -ArgumentList @(
-        "-no-remote", "-profile", $ProfilePath, "-url", "about:blank"
+        "-no-remote", "--allow-downgrade", "-profile", $ProfilePath, "-url", "about:blank"
     ) | Out-Null
+}
+
+function Clear-StealthProfileCompatibilityMarker {
+    param([string]$ProfilePath)
+
+    if (-not $ProfilePath) { return }
+    foreach ($name in @("compatibility.ini", "compatibility.ini.tmp")) {
+        $path = Join-Path $ProfilePath $name
+        if (Test-Path $path) {
+            Remove-Item $path -Force -ErrorAction SilentlyContinue
+            Write-SetupLog "Cleared $name" "Detail"
+        }
+    }
 }
 
 function Apply-StealthProfileBundle {
@@ -1070,6 +1083,7 @@ function Apply-StealthProfileBundle {
     Set-ProfilePref -ProfilePath $ProfilePath -Name "browser.startup.page" -Value "1" -AsInt
     Set-ProfileDefaultZoom -ProfilePath $ProfilePath
     Set-ProfileDefaultSearch -ProfilePath $ProfilePath -SearchEngine $SearchEngine
+    Clear-StealthProfileCompatibilityMarker -ProfilePath $ProfilePath
 
     Write-StealthProfileMarker -ProfilePath $ProfilePath -SetupVersion $SetupVersion -SearchEngine $SearchEngine
     Write-SetupLog "Profile marker: v$SetupVersion" "Ok"
