@@ -566,6 +566,7 @@ function Get-StealthSearchEngineOptions {
         [PSCustomObject]@{
             Id            = "Stealth"
             Name          = "Stealth"
+            DisplayName   = "Stealth"
             SearchForm    = "https://www.google.com/"
             SearchTemplate = "https://www.google.com/search"
             URLTemplate   = "https://www.google.com/search?q={searchTerms}"
@@ -578,6 +579,7 @@ function Get-StealthSearchEngineOptions {
         [PSCustomObject]@{
             Id            = "Google"
             Name          = "Google"
+            DisplayName   = "Chrome / Google"
             SearchForm    = "https://www.google.com/"
             SearchTemplate = "https://www.google.com/search"
             URLTemplate   = "https://www.google.com/search?q={searchTerms}"
@@ -590,6 +592,7 @@ function Get-StealthSearchEngineOptions {
         [PSCustomObject]@{
             Id            = "DuckDuckGo"
             Name          = "DuckDuckGo"
+            DisplayName   = "DuckDuckGo"
             SearchForm    = "https://duckduckgo.com/"
             SearchTemplate = "https://duckduckgo.com/"
             URLTemplate   = "https://duckduckgo.com/?q={searchTerms}"
@@ -602,6 +605,7 @@ function Get-StealthSearchEngineOptions {
         [PSCustomObject]@{
             Id            = "Bing"
             Name          = "Bing"
+            DisplayName   = "Bing"
             SearchForm    = "https://www.bing.com/"
             SearchTemplate = "https://www.bing.com/search"
             URLTemplate   = "https://www.bing.com/search?q={searchTerms}"
@@ -614,6 +618,7 @@ function Get-StealthSearchEngineOptions {
         [PSCustomObject]@{
             Id            = "SearXNG"
             Name          = "SearXNG"
+            DisplayName   = "SearXNG"
             SearchForm    = "https://searx.tiekoetter.com/"
             SearchTemplate = "https://searx.tiekoetter.com/search"
             URLTemplate   = "https://searx.tiekoetter.com/search?q={searchTerms}&language=ru-RU"
@@ -634,12 +639,12 @@ function Resolve-StealthSearchEngine {
     }
 
     $value = $SearchEngine.Trim()
-    if ($value -match '^(chrome|google chrome)$') {
+    if ($value -match '^(chrome|google chrome|chrome\s*/\s*google|chrome google)$') {
         return "Google"
     }
 
     foreach ($option in (Get-StealthSearchEngineOptions)) {
-        if ($option.Id -ieq $value -or $option.Name -ieq $value) {
+        if ($option.Id -ieq $value -or $option.Name -ieq $value -or $option.DisplayName -ieq $value) {
             return $option.Id
         }
     }
@@ -661,7 +666,11 @@ function Get-StealthSearchEngineDefinition {
 
 function Get-StealthSearchEngineDisplayName {
     param([string]$SearchEngine = "Stealth")
-    return (Get-StealthSearchEngineDefinition -SearchEngine $SearchEngine).Name
+    $option = Get-StealthSearchEngineDefinition -SearchEngine $SearchEngine
+    if ($option.PSObject.Properties.Name -contains "DisplayName" -and -not [string]::IsNullOrWhiteSpace($option.DisplayName)) {
+        return $option.DisplayName
+    }
+    return $option.Name
 }
 
 function Get-StealthDistributionPoliciesObject {

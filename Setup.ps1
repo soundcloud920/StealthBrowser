@@ -411,7 +411,13 @@ $comboSearch.ForeColor = $ColorText
 $comboSearch.Font = $uiFont
 $comboSearch.Size = New-Object System.Drawing.Size(302, 24)
 foreach ($option in $script:searchOptions) {
-    [void]$comboSearch.Items.Add($option.Name)
+    $displayName = if ($option.PSObject.Properties.Name -contains "DisplayName" -and -not [string]::IsNullOrWhiteSpace($option.DisplayName)) {
+        $option.DisplayName
+    }
+    else {
+        $option.Name
+    }
+    [void]$comboSearch.Items.Add($displayName)
 }
 $defaultSearchIndex = 0
 for ($i = 0; $i -lt $script:searchOptions.Count; $i++) {

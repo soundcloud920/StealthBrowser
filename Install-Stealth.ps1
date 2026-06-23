@@ -141,7 +141,7 @@ function Get-SetupVersion {
         return [PSCustomObject]@{
             ProductName  = "StealthBrowser"
             GitHubRepo   = "soundcloud920/StealthBrowser"
-            SetupVersion = "1.0.9-beta"
+            SetupVersion = "1.0.10-beta"
             EngineVersion = "151.0.3"
             EngineLang   = "ru"
         }
@@ -1069,7 +1069,16 @@ function Apply-StealthProfileBundle {
 
     Copy-Item (Join-Path $Root "templates\userChrome.css") (Join-Path $chromeDir "userChrome.css") -Force
     Copy-Item (Join-Path $Root "templates\userChrome.js") (Join-Path $chromeDir "userChrome.js") -Force
-    Copy-Item (Join-Path $Root "templates\userContent.css") (Join-Path $chromeDir "userContent.css") -Force
+    $resolvedSearchEngine = Resolve-StealthSearchEngine -SearchEngine $SearchEngine
+    $userContentPath = Join-Path $chromeDir "userContent.css"
+    if ($resolvedSearchEngine -eq "Google") {
+        Remove-Item $userContentPath -Force -ErrorAction SilentlyContinue
+        Write-SetupLog "Google page CSS: native site CSS" "Detail"
+    }
+    else {
+        Copy-Item (Join-Path $Root "templates\userContent.css") $userContentPath -Force
+        Write-SetupLog "Content CSS: Stealth skin" "Detail"
+    }
     Copy-Item (Join-Path $Root "LLG_Relicus-*.ttf") $faDest -Force
     Copy-Item (Join-Path $Root "fa-fonts\*.woff2") $faDest -Force
     Copy-Item (Join-Path $Root "fa-fonts\*.ttf") $faDest -Force

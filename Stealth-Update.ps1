@@ -345,7 +345,7 @@ function Install-StealthReleaseUpdate {
         Push-Location $extractDir
         try {
             . (Join-Path $extractDir "Install-Stealth.ps1")
-            $searchEngine = if ($localCfg -and $localCfg.SearchEngine -and $localCfg.SearchEngine -ne "Google") { $localCfg.SearchEngine } else { "Stealth" }
+            $searchEngine = if ($localCfg -and $localCfg.SearchEngine) { $localCfg.SearchEngine } else { "Stealth" }
             Invoke-StealthSetup -ProfileOnly:$profileOnly -LaunchWhenDone:$false -SearchEngine $searchEngine
         }
         finally {

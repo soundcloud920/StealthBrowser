@@ -6,7 +6,7 @@ using K4os.Compression.LZ4;
 
 if (args.Length < 1)
 {
-    Console.Error.WriteLine("Usage: SetProfileSearch <profilePath|search.json.mozlz4> [Stealth|Google|DuckDuckGo|Bing|SearXNG]");
+    Console.Error.WriteLine("Usage: SetProfileSearch <profilePath|search.json.mozlz4> [Stealth|Chrome|Google|DuckDuckGo|Bing|SearXNG]");
     return 1;
 }
 
@@ -29,7 +29,9 @@ SearchProvider ResolveProvider(string? value)
 {
     var requested = string.IsNullOrWhiteSpace(value) ? "Stealth" : value.Trim();
     if (requested.Equals("Chrome", StringComparison.OrdinalIgnoreCase) ||
-        requested.Equals("Google Chrome", StringComparison.OrdinalIgnoreCase))
+        requested.Equals("Google Chrome", StringComparison.OrdinalIgnoreCase) ||
+        requested.Equals("Chrome / Google", StringComparison.OrdinalIgnoreCase) ||
+        requested.Equals("Chrome Google", StringComparison.OrdinalIgnoreCase))
     {
         requested = "Google";
     }
