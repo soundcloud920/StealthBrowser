@@ -141,7 +141,7 @@ function Get-SetupVersion {
         return [PSCustomObject]@{
             ProductName  = "StealthBrowser"
             GitHubRepo   = "soundcloud920/StealthBrowser"
-            SetupVersion = "1.0.3-beta"
+            SetupVersion = "1.0.4-beta"
             EngineVersion = "151.0.3"
             EngineLang   = "ru"
         }
@@ -423,21 +423,32 @@ function Test-StealthIsAdministrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Get-StealthDesktopDir {
+    $desktop = [Environment]::GetFolderPath('Desktop')
+    if ([string]::IsNullOrWhiteSpace($desktop)) {
+        $desktop = Join-Path $env:USERPROFILE "Desktop"
+    }
+    return $desktop
+}
+
 function Invoke-StealthElevatedSilently {
     param([string]$Script)
-
-    if (Test-StealthIsAdministrator) {
-        Invoke-Expression $Script
-        return 0
-    }
 
     $tempFile = Join-Path $env:TEMP ("stealth-elev-{0}.ps1" -f [guid]::NewGuid().ToString('n'))
     try {
         $utf8Bom = New-Object System.Text.UTF8Encoding $true
         [System.IO.File]::WriteAllText($tempFile, $Script, $utf8Bom)
-        $proc = Start-Process -FilePath 'powershell.exe' `
-            -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$tempFile`"" `
-            -Wait -PassThru -Verb RunAs -WindowStyle Hidden
+        $startArgs = @{
+            FilePath     = 'powershell.exe'
+            ArgumentList = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$tempFile`""
+            Wait         = $true
+            PassThru     = $true
+            WindowStyle  = 'Hidden'
+        }
+        if (-not (Test-StealthIsAdministrator)) {
+            $startArgs.Verb = 'RunAs'
+        }
+        $proc = Start-Process @startArgs
         if ($proc) { return $proc.ExitCode }
         return 1
     }
@@ -916,7 +927,7 @@ function Get-StealthSetupStatus {
 
 function Remove-LegacyStealthShortcuts {
     foreach ($legacy in @(
-            (Join-Path $env:USERPROFILE "Desktop\uuj Firefox.lnk"),
+            (Join-Path (Get-StealthDesktopDir) "uuj Firefox.lnk"),
             (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\uuj Firefox.lnk")
         )) {
         if (Test-Path $legacy) { Remove-Item $legacy -Force }
@@ -957,9 +968,11 @@ function Install-StealthShortcut {
     }
 
     $shell = New-Object -ComObject WScript.Shell
+    $desktopDir = Get-StealthDesktopDir
+    $startMenuDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
     $paths = @(
-        (Join-Path $env:USERPROFILE "Desktop\$shortcutName.lnk"),
-        (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\$shortcutName.lnk")
+        (Join-Path $desktopDir "$shortcutName.lnk"),
+        (Join-Path $startMenuDir "$shortcutName.lnk")
     )
 
     foreach ($lnkPath in $paths) {
@@ -972,13 +985,16 @@ function Install-StealthShortcut {
         $shortcut.IconLocation = "$launcherExe,0"
         $shortcut.Description = $shortcutName
         $shortcut.Save() | Out-Null
+        if (-not (Test-Path -LiteralPath $lnkPath)) {
+            throw "Shortcut was not created: $lnkPath"
+        }
         Set-StealthShortcutShellProperties -LnkPath $lnkPath -LauncherCmd $launcherExe -IconPath "$launcherExe,0"
         Write-SetupLog "shortcut: $lnkPath" "Detail"
     }
 
     Register-StealthTaskbarIdentity -StealthExe $StealthExe -LauncherPath $launcherExe -IconPath "$launcherExe,0" -ProfilePath $ProfilePath -SetAsDefaultBrowser
     Remove-MozillaFirefoxShortcuts
-    $desktopLnk = Join-Path $env:USERPROFILE "Desktop\$shortcutName.lnk"
+    $desktopLnk = Join-Path $desktopDir "$shortcutName.lnk"
     Pin-StealthShortcutToTaskbar -LnkPath $desktopLnk -LauncherCmd $launcherExe -IconPath "$launcherExe,0"
     Write-SetupLog "Taskbar: Stealth pinned, Mozilla Firefox shortcuts removed" "Detail"
     Write-SetupLog "Launch via shortcut: $shortcutName" "Detail"
@@ -1124,6 +1140,9 @@ function Invoke-StealthSetup {
         $stealthExe = Install-StealthIfNeeded -Version $cfg.EngineVersion -Lang $cfg.EngineLang -SearchEngine $SearchEngine
     }
 
+    Write-SetupProgress -Percent 60 -Message "Обновление файлов Stealth..."
+    Install-StealthLauncherFiles -InstallScriptDir $script:InstallScriptDir
+
     Write-SetupProgress -Percent 62 -Message "Удаление Mozilla Maintenance Service..."
     Remove-MozillaMaintenanceService
     Remove-MozillaUpdateTasks
@@ -1139,6 +1158,15 @@ function Invoke-StealthSetup {
     Patch-StealthProfileLangpack -ProfilePath $profilePath
     Clear-StealthProfileStartupCache -ProfilePath $profilePath
 
+    Write-StealthLaunchConfig `
+        -ProductName $cfg.ProductName `
+        -GitHubRepo $cfg.GitHubRepo `
+        -ProfilePath $profilePath `
+        -StealthExe $stealthExe `
+        -SetupVersion $cfg.SetupVersion `
+        -EngineVersion $cfg.EngineVersion `
+        -SearchEngine $SearchEngine
+
     if (-not $ProfileOnly) {
         Write-SetupProgress -Percent 88 -Message "Создание ярлыков и таскбара..."
         Install-StealthShortcut -Root $Root -StealthExe $stealthExe -ProfilePath $profilePath
@@ -1150,15 +1178,6 @@ function Invoke-StealthSetup {
             Register-StealthTaskbarIdentity -StealthExe $stealthExe -LauncherPath $launcherExe -IconPath "$launcherExe,0" -ProfilePath $profilePath -SetAsDefaultBrowser
         }
     }
-
-    Write-StealthLaunchConfig `
-        -ProductName $cfg.ProductName `
-        -GitHubRepo $cfg.GitHubRepo `
-        -ProfilePath $profilePath `
-        -StealthExe $stealthExe `
-        -SetupVersion $cfg.SetupVersion `
-        -EngineVersion $cfg.EngineVersion `
-        -SearchEngine $SearchEngine
 
     if ($LaunchWhenDone) {
         Write-SetupProgress -Percent 95 -Message "Запуск Stealth..."

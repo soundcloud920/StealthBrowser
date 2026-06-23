@@ -699,11 +699,28 @@ $script:SetupProgressQueue = $ProgressQueue
 try {
     Invoke-StealthSetup -SearchEngine $SearchEngine
     $status = Get-StealthSetupStatus
+    $cfg = Get-SetupVersion
     if (-not $status.ProfileExists) {
         throw "Профиль Stealth не создан. Повторите установку."
     }
     if (-not $status.EngineInstalled) {
         throw "Firefox engine не установлен. Повторите установку."
+    }
+    if ($status.NeedsUpdate -or -not $status.IsCurrent) {
+        $installed = if ($status.InstalledVersion) { "v$($status.InstalledVersion)" } else { "без версии" }
+        throw "Профиль Stealth не обновился до v$($cfg.SetupVersion). Сейчас: $installed."
+    }
+    $desktopDir = [Environment]::GetFolderPath('Desktop')
+    if ([string]::IsNullOrWhiteSpace($desktopDir)) {
+        $desktopDir = Join-Path $env:USERPROFILE "Desktop"
+    }
+    $desktopLnk = Join-Path $desktopDir "Stealth.lnk"
+    $startMenuLnk = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Stealth.lnk"
+    if (-not (Test-Path -LiteralPath $desktopLnk)) {
+        throw "Ярлык Stealth не создан на рабочем столе: $desktopLnk"
+    }
+    if (-not (Test-Path -LiteralPath $startMenuLnk)) {
+        throw "Ярлык Stealth не создан в меню Пуск: $startMenuLnk"
     }
 }
 catch {
