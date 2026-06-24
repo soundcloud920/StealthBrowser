@@ -2,7 +2,7 @@
 
 **Stealth** — приватный браузер на движке Mozilla Firefox, собранный в один установщик под Windows 10/11. Не форк. Не «сборка с вирусами». Готовый профиль, политики движка, лаунчер и автообновление — всё из коробки.
 
-**Текущая версия: `1.0.14-beta`**
+**Текущая версия: `1.0.15-beta`**
 
 ---
 
@@ -12,8 +12,8 @@
 
 | Файл | Для кого |
 |------|----------|
-| **`StealthBrowser-Setup-v1.0.14-beta.exe`** | Обычная установка — двойной клик |
-| **`StealthBrowser-setup-v1.0.14-beta.zip`** | Портатив / разработчики |
+| **`StealthBrowser-Setup-v1.0.15-beta.exe`** | Обычная установка — двойной клик |
+| **`StealthBrowser-setup-v1.0.15-beta.zip`** | Портатив / разработчики |
 
 ---
 
@@ -232,7 +232,7 @@ user_pref("toolkit.cosmeticAnimations.enabled", false);
 ## УСТАНОВКА
 
 1. Закрой **Stealth** и **Firefox** полностью (проверь диспетчер задач).
-2. Скачай **`StealthBrowser-Setup-v1.0.14-beta.exe`** из [Releases](https://github.com/soundcloud920/StealthBrowser/releases/latest).
+2. Скачай **`StealthBrowser-Setup-v1.0.15-beta.exe`** из [Releases](https://github.com/soundcloud920/StealthBrowser/releases/latest).
 3. Запусти → **Install** → мастер StealthBrowser → **Установить**.
 4. Браузер откроется с профилем `*.stealth`.
 5. Дальше — ярлык **Stealth** на рабочем столе / в Пуске.
@@ -240,8 +240,8 @@ user_pref("toolkit.cosmeticAnimations.enabled", false);
 Тихая установка:
 
 ```bat
-StealthBrowser-Setup-v1.0.14-beta.exe /install /search=Stealth
-StealthBrowser-Setup-v1.0.14-beta.exe /install /search=Chrome
+StealthBrowser-Setup-v1.0.15-beta.exe /install /search=Stealth
+StealthBrowser-Setup-v1.0.15-beta.exe /install /search=Chrome
 ```
 
 ### Только обновить профиль (движок уже стоит)
@@ -285,8 +285,8 @@ StealthBrowser-Setup-v1.0.14-beta.exe /install /search=Chrome
 
 Артефакты в `dist/`:
 
-- `StealthBrowser-Setup-v1.0.14-beta.exe`
-- `StealthBrowser-setup-v1.0.14-beta.zip`
+- `StealthBrowser-Setup-v1.0.15-beta.exe`
+- `StealthBrowser-setup-v1.0.15-beta.zip`
 
 Тег `v*` на GitHub → CI собирает и публикует в Releases.
 
@@ -294,7 +294,7 @@ StealthBrowser-Setup-v1.0.14-beta.exe /install /search=Chrome
 
 ## BETA
 
-`1.0.14-beta` — дополнительный фикс Google autocomplete под 95% zoom: подсказки принудительно привязаны к реальной левой координате поля поиска даже когда Google рендерит dropdown отдельным async-слоем. `1.0.13-beta` — фикс Google autocomplete: подсказки снова привязаны к полю поиска, не уезжают вправо после кнопки лупы и держат тёмный компактный стиль. `1.0.12-beta` — фикс налезания Google company/knowledge panel на левую выдачу: жёсткий gap между колонками, ограничение `kp`-обёрток, изображений и таблиц внутри правого блока. `1.0.11-beta` — редетейлинг Stealth Google UI: ровная сетка выдачи, чёрная компактная кнопка лупы, меньше размер текста, фикс right panel, hover-состояний и мобильного overflow. `1.0.10-beta` — отдельный режим **Chrome / Google** в установщике: обычный Google с родным CSS, при этом **Stealth** со старым кастомным Google-скином остается отдельным выбором. `1.0.9-beta` — чистый Google search bar: только лупа на чёрном фоне, плюс чёрная company/knowledge panel без серо-белых блоков. `1.0.8-beta` — чистка Google UI: убраны грязные hover-блоки, скрыт geo-info блок, исправлены цвета иконок/контролов. `1.0.7-beta` — жёсткое левое выравнивание Google-выдачи, фикс sticky-шапки при скролле и затемнение серых Google-плашек. `1.0.6-beta` — фикс верстки Google-результатов: ровная левая колонка для строки поиска, вкладок и текста. `1.0.5-beta` — поисковик Stealth с Google backend + Stealth CSS для страниц Google. `1.0.4-beta` — фикс преждевременного завершения установщика при запуске от администратора + проверка создания ярлыков. `1.0.3-beta` — фикс окна Firefox downgrade protection для профилей, ранее открытых более новым движком. `1.0.2-beta` — pinned Firefox engine + отключение Firefox update paths + фикс silent setup args. `1.0.1-beta` — выбор поисковика в установщике. `1.0.0-beta` — первый публичный срез после перезапуска репозитория. Ожидай:
+`1.0.15-beta` — точный фикс Google autocomplete: nested dropdown внутри формы больше не получает двойной left-offset и становится ровно под полем поиска при 95% zoom. `1.0.14-beta` — дополнительный фикс Google autocomplete под 95% zoom: подсказки принудительно привязаны к реальной левой координате поля поиска даже когда Google рендерит dropdown отдельным async-слоем. `1.0.13-beta` — фикс Google autocomplete: подсказки снова привязаны к полю поиска, не уезжают вправо после кнопки лупы и держат тёмный компактный стиль. `1.0.12-beta` — фикс налезания Google company/knowledge panel на левую выдачу: жёсткий gap между колонками, ограничение `kp`-обёрток, изображений и таблиц внутри правого блока. `1.0.11-beta` — редетейлинг Stealth Google UI: ровная сетка выдачи, чёрная компактная кнопка лупы, меньше размер текста, фикс right panel, hover-состояний и мобильного overflow. `1.0.10-beta` — отдельный режим **Chrome / Google** в установщике: обычный Google с родным CSS, при этом **Stealth** со старым кастомным Google-скином остается отдельным выбором. `1.0.9-beta` — чистый Google search bar: только лупа на чёрном фоне, плюс чёрная company/knowledge panel без серо-белых блоков. `1.0.8-beta` — чистка Google UI: убраны грязные hover-блоки, скрыт geo-info блок, исправлены цвета иконок/контролов. `1.0.7-beta` — жёсткое левое выравнивание Google-выдачи, фикс sticky-шапки при скролле и затемнение серых Google-плашек. `1.0.6-beta` — фикс верстки Google-результатов: ровная левая колонка для строки поиска, вкладок и текста. `1.0.5-beta` — поисковик Stealth с Google backend + Stealth CSS для страниц Google. `1.0.4-beta` — фикс преждевременного завершения установщика при запуске от администратора + проверка создания ярлыков. `1.0.3-beta` — фикс окна Firefox downgrade protection для профилей, ранее открытых более новым движком. `1.0.2-beta` — pinned Firefox engine + отключение Firefox update paths + фикс silent setup args. `1.0.1-beta` — выбор поисковика в установщике. `1.0.0-beta` — первый публичный срез после перезапуска репозитория. Ожидай:
 
 - возможные баги в edge-case сайтах;
 - обновления профиля через Releases;
@@ -314,7 +314,7 @@ StealthBrowser/
 ├── Stealth-Update.ps1          # GitHub releases API
 ├── Stealth-ApplyUpdate.ps1     # Применение обновления (видимая консоль)
 ├── Stealth-Engine.ps1          # Брендинг движка
-├── version.json                # 1.0.14-beta
+├── version.json                # 1.0.15-beta
 ├── bundle/                     # Шаблоны профиля (LFS)
 │   └── templates/
 │       ├── user.js
@@ -333,4 +333,4 @@ StealthBrowser/
 
 ---
 
-**StealthBrowser** · Relicyos · `1.0.14-beta`
+**StealthBrowser** · Relicyos · `1.0.15-beta`
